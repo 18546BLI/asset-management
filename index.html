@@ -14,10 +14,10 @@
     <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
       <div>
         <h1 class="text-2xl font-bold text-emerald-400">💰 個人資產管理系統</h1>
-        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 台灣銀行匯率 · 台美股/黃金/基金整合</p>
+        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · Yahoo Finance 自動抓價 · 台灣銀行匯率</p>
       </div>
       <div id="auth-status-header" class="mt-4 md:mt-0">
-        <!-- 登入後會在此顯示使用者資訊與登出按鈕 -->
+        <!-- 登入後顯示使用者資訊 -->
       </div>
     </header>
 
@@ -42,7 +42,7 @@
 
     <!-- 主要內容區塊 (登入後顯示) -->
     <div id="main-app" class="hidden space-y-6">
-      <!-- Overview Dashboard -->
+      <!-- 總資產與匯率儀表板 -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
           <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">總資產估值 (TWD)</span>
@@ -59,7 +59,10 @@
         <div class="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
           <div class="flex justify-between items-center border-b border-slate-700 pb-4">
             <h2 class="text-xl font-bold text-slate-200">📊 個人資產清單</h2>
-            <button onclick="toggleAssetModal(true)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition">+ 新增資產</button>
+            <div class="flex gap-2">
+              <button onclick="loadAssets()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-xl text-xs font-medium transition">🔄 重新抓價</button>
+              <button onclick="toggleAssetModal(true)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition">+ 新增資產</button>
+            </div>
           </div>
 
           <div class="overflow-x-auto">
@@ -69,7 +72,7 @@
                   <th class="p-3">名稱 / 代碼</th>
                   <th class="p-3">類別</th>
                   <th class="p-3">數量</th>
-                  <th class="p-3">單價</th>
+                  <th class="p-3">最新價格 (Yahoo)</th>
                   <th class="p-3">折算台幣</th>
                   <th class="p-3 text-center">操作</th>
                 </tr>
@@ -118,20 +121,21 @@
       <form onsubmit="handleAddAsset(event)" class="space-y-3 text-sm">
         <div>
           <label class="block text-slate-400 mb-1">資產名稱</label>
-          <input type="text" id="new-asset-name" placeholder="例如：台積電、VOO、美元定存" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+          <input type="text" id="new-asset-name" placeholder="例如：元大台灣50、VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
         </div>
         <div>
-          <label class="block text-slate-400 mb-1">代碼 (選填)</label>
-          <input type="text" id="new-asset-symbol" placeholder="例如：2330, VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+          <label class="block text-slate-400 mb-1">代碼 (Yahoo 代碼)</label>
+          <input type="text" id="new-asset-symbol" placeholder="台股填 0050.TW，美股填 VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+          <p class="text-xs text-slate-400 mt-1">※ 台股/ETF 請加 `.TW`（如 `0050.TW`、`2330.TW`），美股直接填代碼（如 `VOO`）。</p>
         </div>
         <div>
           <label class="block text-slate-400 mb-1">資產類別</label>
           <select id="new-asset-type" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-            <option value="股票/ETF">股票/ETF</option>
-            <option value="現金/存款">現金/存款</option>
-            <option value="基金">基金</option>
-            <option value="黃金/貴金屬">黃金/貴金屬</option>
-            <option value="其他">其他</option>
+            <option value="stock">股票 / ETF</option>
+            <option value="fund">基金 / 連結基金</option>
+            <option value="cash">現金 / 存款</option>
+            <option value="gold">黃金 / 貴金屬</option>
+            <option value="other">其他</option>
           </select>
         </div>
         <div>
@@ -139,7 +143,7 @@
           <input type="number" id="new-asset-qty" step="any" placeholder="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
         </div>
         <div>
-          <label class="block text-slate-400 mb-1">目前單價</label>
+          <label class="block text-slate-400 mb-1">預設/備用單價 (若抓不到價格時使用)</label>
           <input type="number" id="new-asset-price" step="any" placeholder="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
         </div>
         <div>
@@ -158,14 +162,21 @@
   </div>
 
   <script>
-    const SUPABASE_URL = 'https://zsrnxfluhqjseltmgimm.supabase.co/rest/v1/';
-    // 已校正修復後的 anon API key
-    const SUPABASE_ANON_KEY ='sb_publishable_ix_4ZSypiUVpMxdDzE8Frg___QsGMfO';
+    const SUPABASE_URL = 'https://zsrnxfluhqjseltmgimm.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_ix_4ZSypiUVpMxdDzE8Frg___QsGMfO';
 
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     let currentUsdRate = 32.5;
     let currentUser = null;
     let authMode = 'login';
+
+    const typeMap = {
+      'stock': '股票/ETF',
+      'fund': '基金/連結基金',
+      'cash': '現金/存款',
+      'gold': '黃金/貴金屬',
+      'other': '其他'
+    };
 
     async function init() {
       await fetchRates();
@@ -236,6 +247,26 @@
       }
     }
 
+    // 連線 Yahoo Finance API 抓取即時價格
+    async function fetchYahooPrice(symbol) {
+      if (!symbol) return null;
+      let cleanSymbol = symbol.trim().toUpperCase();
+      // 如果只有數字，自動補上 .TW (針對台股代碼)
+      if (/^\d{4,6}$/.test(cleanSymbol)) {
+        cleanSymbol += '.TW';
+      }
+
+      try {
+        const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}`);
+        const data = await response.json();
+        const price = data.chart.result[0].meta.regularMarketPrice;
+        return price || null;
+      } catch (err) {
+        console.warn(`無法抓取 ${cleanSymbol} 的 Yahoo 價格:`, err);
+        return null;
+      }
+    }
+
     async function loadAssets() {
       if (!currentUser) return;
       const { data: assets, error } = await supabaseClient.from('assets').select('*');
@@ -248,25 +279,47 @@
         return;
       }
 
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-slate-400">正在透過 Yahoo Finance 自動更新最新股價...</td></tr>`;
+
       let totalTwd = 0;
-      tbody.innerHTML = assets.map(a => {
+      let tableRows = '';
+
+      for (const a of assets) {
+        let activePrice = a.current_price;
+        let isLivePrice = false;
+
+        // 若填有代碼且為股票類別，嘗試抓 Yahoo 價格
+        if (a.symbol && (a.type === 'stock' || a.type === 'fund')) {
+          const livePrice = await fetchYahooPrice(a.symbol);
+          if (livePrice !== null) {
+            activePrice = livePrice;
+            isLivePrice = true;
+          }
+        }
+
         const rate = a.currency === 'USD' ? currentUsdRate : 1;
-        const twdVal = a.quantity * a.current_price * rate;
+        const twdVal = a.quantity * activePrice * rate;
         totalTwd += twdVal;
-        return `
+        const displayType = typeMap[a.type] || a.type;
+
+        tableRows += `
           <tr class="hover:bg-slate-700/30">
             <td class="p-3 font-medium text-slate-100">${a.name} <span class="text-xs text-slate-400">(${a.symbol || '-'})</span></td>
-            <td class="p-3 text-slate-400">${a.type}</td>
+            <td class="p-3 text-slate-400">${displayType}</td>
             <td class="p-3">${a.quantity}</td>
-            <td class="p-3">${a.currency} ${a.current_price}</td>
+            <td class="p-3 font-medium ${isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
+              ${a.currency} ${Number(activePrice).toFixed(2)}
+              ${isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">Yahoo即時</span>' : ''}
+            </td>
             <td class="p-3 font-semibold text-emerald-400">NT$ ${Math.round(twdVal).toLocaleString()}</td>
             <td class="p-3 text-center">
               <button onclick="deleteAsset(${a.id})" class="text-red-400 hover:text-red-300 text-xs bg-red-950/50 hover:bg-red-900/50 border border-red-800 px-2.5 py-1 rounded-lg transition">刪除</button>
             </td>
           </tr>
         `;
-      }).join('');
+      }
 
+      tbody.innerHTML = tableRows;
       document.getElementById('total-assets').innerText = 'NT$ ' + Math.round(totalTwd).toLocaleString();
     }
 
