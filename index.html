@@ -159,6 +159,7 @@
 
   <script>
     const SUPABASE_URL = 'https://zsrnxfluhqjseltmgimm.supabase.co';
+    // 已校正修復後的 anon API key
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc254Zmx1aHFqc2VsdG1naW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEzNzYwNTIsImV4cCI6MjA1Njk1MjA1Mn0.S8vE7xT_EThC20-d_gMvU7B_3bZq1kU9uN7ZgX1N0dE';
 
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -204,7 +205,7 @@
         const { data, error } = await supabaseClient.auth.signUp({ email, password });
         if (error) alert('註冊失敗：' + error.message);
         else {
-          alert('註冊成功！如果需要 Email 驗證，請至信箱點擊連結；若未啟動驗證則可直接登入。');
+          alert('註冊成功！');
           currentUser = data.user;
           updateUI();
         }
