@@ -68,7 +68,7 @@
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <!-- 左側：Asset List (占 7 格) -->
         <div class="lg:col-span-7 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
-          <div class="flex justify-between items-center border-b border-slate-700 pb-4">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-700 pb-4">
             <h2 class="text-xl font-bold text-slate-200">📊 個人資產清單</h2>
             <div class="flex gap-2">
               <button onclick="loadAssets()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-xl text-xs font-medium transition">🔄 重新抓價</button>
@@ -76,7 +76,25 @@
             </div>
           </div>
 
-          <div class="overflow-x-auto">
+          <!-- 🔍 查詢與檢視切換工具列 -->
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700/60">
+            <!-- 搜尋框 -->
+            <div class="relative flex-1 min-w-[180px]">
+              <input type="text" id="asset-search" oninput="renderAssetView()" placeholder="搜尋名稱、代碼或帳戶..." class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
+            </div>
+            <!-- 歸類切換 -->
+            <div class="flex items-center gap-2 text-xs">
+              <span class="text-slate-400">歸類方式:</span>
+              <select id="asset-group-mode" onchange="renderAssetView()" class="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-1.5 focus:outline-none focus:border-emerald-500">
+                <option value="flat">明細清單</option>
+                <option value="account">依存放帳戶</option>
+                <option value="type">依庫存類別</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 資產內容展示區 -->
+          <div id="asset-display-container" class="overflow-x-auto">
             <table class="w-full text-left text-sm text-slate-300">
               <thead class="text-xs uppercase bg-slate-700/50 text-slate-400">
                 <tr>
@@ -181,8 +199,11 @@
           <input type="text" id="new-asset-name" placeholder="例如：Vanguard S&P 500 ETF" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
         </div>
         <div>
-          <label class="block text-slate-400 mb-1">存放帳戶 / 券商備註</label>
-          <input type="text" id="new-asset-account" placeholder="例如：永豐金證券、國泰世華、第一證券" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" value="預設帳戶" required>
+          <label class="block text-slate-400 mb-1">存放帳戶 / 券商</label>
+          <select id="new-asset-account-select" onchange="handleAccountSelectChange(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+            <!-- 動態帶入用戶帳戶選單 -->
+          </select>
+          <input type="text" id="new-asset-account-custom" placeholder="請輸入新帳戶名稱 (例如：中國信託、富邦證券)" class="hidden w-full bg-slate-900 border border-emerald-500 rounded-xl p-2.5 text-slate-200 mt-2">
         </div>
         <div>
           <label id="qty-label" class="block text-slate-400 mb-1">本次增加數量 / 股數</label>
@@ -240,8 +261,8 @@
     let authMode = 'login';
     let rawTransactions = [];
     let loadedAssets = [];
+    let userAccountsList = ['預設帳戶', '永豐金證券', '國泰世華', '第一證券']; // 預設帳戶庫
 
-    // 常用股票代碼與預設名稱映射庫
     const knownStockNames = {
       'VOO': 'Vanguard S&P 500 ETF',
       'QQQ': 'Invesco QQQ Trust',
@@ -260,11 +281,11 @@
     };
 
     const typeMap = {
-      'stock': '股票/ETF',
-      'fund': '基金/連結基金',
-      'cash': '現金/存款',
-      'gold': '黃金/貴金屬',
-      'other': '其他'
+      'stock': '📈 股票/ETF',
+      'fund': '🏦 基金/連結基金',
+      'cash': '💵 現金/存款',
+      'gold': '🏆 黃金/貴金屬',
+      'other': '📦 其他'
     };
 
     async function init() {
@@ -356,7 +377,6 @@
       }
     }
 
-    // 代碼輸入輔助：自動填寫名稱與判斷幣別
     function handleSymbolInput(symbol) {
       const clean = symbol.trim().toUpperCase();
       const nameInput = document.getElementById('new-asset-name');
@@ -375,7 +395,6 @@
       }
     }
 
-    // 智能美股/台股抓價邏輯
     async function fetchStockPrice(symbol) {
       if (!symbol) return null;
       let cleanSymbol = symbol.trim().toUpperCase().replace('.TW', '');
@@ -435,22 +454,32 @@
       if (error) return console.error('Fetch error:', error);
 
       loadedAssets = assets || [];
-      const tbody = document.getElementById('asset-table-body');
-      
+
+      // 自動從用戶現有資產收集所有自訂過的帳戶名稱
+      loadedAssets.forEach(a => {
+        const acc = a.account || '預設帳戶';
+        if (!userAccountsList.includes(acc)) {
+          userAccountsList.push(acc);
+        }
+      });
+
       if (!loadedAssets || loadedAssets.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-slate-500">目前尚無資產資料，點擊右上角「+ 新增資產」開始建立</td></tr>`;
+        document.getElementById('asset-display-container').innerHTML = `
+          <div class="text-center p-8 text-slate-500 border border-slate-700/50 rounded-xl">
+            目前尚無資產資料，點擊右上角「+ 新增資產」開始建立
+          </div>`;
         document.getElementById('total-assets').innerText = 'NT$ 0';
-        renderAccountDistribution({});
+        renderAccountDistribution({}, 0);
         return;
       }
 
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-slate-400">正在獲取最新即時價格...</td></tr>`;
+      document.getElementById('asset-display-container').innerHTML = `
+        <div class="text-center p-8 text-slate-400 border border-slate-700/50 rounded-xl">
+          正在獲取最新即時價格...
+        </div>`;
 
-      let totalTwd = 0;
-      let tableRows = '';
-      let accountTotals = {};
-
-      for (const a of loadedAssets) {
+      // 抓價與運算
+      for (let a of loadedAssets) {
         let activePrice = a.current_price || 1;
         let isLivePrice = false;
 
@@ -476,32 +505,113 @@
         }
 
         const rate = currency === 'USD' ? currentUsdRate : 1;
-        const twdVal = a.quantity * activePrice * rate;
-        totalTwd += twdVal;
-
-        const accName = a.account || '預設帳戶';
-        accountTotals[accName] = (accountTotals[accName] || 0) + twdVal;
-
-        tableRows += `
-          <tr class="hover:bg-slate-700/30">
-            <td class="p-3 font-medium text-slate-100">${a.name} <span class="text-xs text-slate-400">(${a.symbol || '-'})</span></td>
-            <td class="p-3"><span class="bg-slate-700/60 border border-slate-600 text-slate-300 text-xs px-2 py-0.5 rounded-md">${accName}</span></td>
-            <td class="p-3">${a.quantity}</td>
-            <td class="p-3 font-medium ${isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
-              ${currency} ${Number(activePrice).toFixed(2)}
-              ${isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : (a.type === 'cash' ? '' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>')}
-            </td>
-            <td class="p-3 font-semibold text-emerald-400">NT$ ${Math.round(twdVal).toLocaleString()}</td>
-            <td class="p-3 text-center">
-              <button onclick="deleteAsset('${a.id}')" class="text-red-400 hover:text-red-300 text-xs bg-red-950/50 hover:bg-red-900/50 border border-red-800 px-2.5 py-1 rounded-lg transition">刪除</button>
-            </td>
-          </tr>
-        `;
+        a._activePrice = activePrice;
+        a._isLivePrice = isLivePrice;
+        a._currency = currency;
+        a._twdVal = a.quantity * activePrice * rate;
       }
 
-      tbody.innerHTML = tableRows;
+      // 算總資產與帳戶分佈
+      let totalTwd = 0;
+      let accountTotals = {};
+
+      loadedAssets.forEach(a => {
+        totalTwd += a._twdVal;
+        const accName = a.account || '預設帳戶';
+        accountTotals[accName] = (accountTotals[accName] || 0) + a._twdVal;
+      });
+
       document.getElementById('total-assets').innerText = 'NT$ ' + Math.round(totalTwd).toLocaleString();
       renderAccountDistribution(accountTotals, totalTwd);
+
+      // 渲染視圖
+      renderAssetView();
+    }
+
+    function renderAssetView() {
+      const searchKeyword = document.getElementById('asset-search').value.trim().toLowerCase();
+      const groupMode = document.getElementById('asset-group-mode').value;
+      const container = document.getElementById('asset-display-container');
+
+      // 關鍵字過濾
+      let filtered = loadedAssets.filter(a => {
+        const nameMatch = (a.name || '').toLowerCase().includes(searchKeyword);
+        const symbolMatch = (a.symbol || '').toLowerCase().includes(searchKeyword);
+        const accountMatch = (a.account || '預設帳戶').toLowerCase().includes(searchKeyword);
+        return nameMatch || symbolMatch || accountMatch;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center p-8 text-slate-500">查無符合「${searchKeyword}」的資產資料</div>`;
+        return;
+      }
+
+      if (groupMode === 'flat') {
+        // 明細清單
+        let rows = filtered.map(a => renderAssetRow(a)).join('');
+        container.innerHTML = `
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="text-xs uppercase bg-slate-700/50 text-slate-400">
+              <tr>
+                <th class="p-3">名稱 / 代碼</th>
+                <th class="p-3">存放帳戶</th>
+                <th class="p-3">數量</th>
+                <th class="p-3">最新價格</th>
+                <th class="p-3">折算台幣</th>
+                <th class="p-3 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-700">${rows}</tbody>
+          </table>
+        `;
+      } else {
+        // 分組檢視（依帳戶 或 依類別）
+        let groups = {};
+        filtered.forEach(a => {
+          let key = groupMode === 'account' ? (a.account || '預設帳戶') : (typeMap[a.type] || '其他');
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(a);
+        });
+
+        let html = '<div class="space-y-4">';
+        for (const [groupName, items] of Object.entries(groups)) {
+          const groupTotal = items.reduce((sum, item) => sum + item._twdVal, 0);
+          const itemRows = items.map(a => renderAssetRow(a)).join('');
+
+          html += `
+            <div class="bg-slate-900/40 border border-slate-700/70 rounded-xl overflow-hidden">
+              <div class="flex justify-between items-center bg-slate-700/40 px-4 py-2.5 font-bold text-slate-200">
+                <span>${groupName} (${items.length})</span>
+                <span class="text-emerald-400">小計: NT$ ${Math.round(groupTotal).toLocaleString()}</span>
+              </div>
+              <table class="w-full text-left text-sm text-slate-300">
+                <tbody class="divide-y divide-slate-700/60">${itemRows}</tbody>
+              </table>
+            </div>
+          `;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+      }
+    }
+
+    function renderAssetRow(a) {
+      const accName = a.account || '預設帳戶';
+      return `
+        <tr class="hover:bg-slate-700/30">
+          <td class="p-3 font-medium text-slate-100">${a.name} <span class="text-xs text-slate-400">(${a.symbol || '-'})</span></td>
+          <td class="p-3"><span class="bg-slate-700/60 border border-slate-600 text-slate-300 text-xs px-2 py-0.5 rounded-md">${accName}</span></td>
+          <td class="p-3">${a.quantity}</td>
+          <td class="p-3 font-medium ${a._isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
+            ${a._currency} ${Number(a._activePrice).toFixed(2)}
+            ${a._isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : (a.type === 'cash' ? '' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>')}
+          </td>
+          <td class="p-3 font-semibold text-emerald-400">NT$ ${Math.round(a._twdVal).toLocaleString()}</td>
+          <td class="p-3 text-center">
+            <button onclick="deleteAsset('${a.id}')" class="text-red-400 hover:text-red-300 text-xs bg-red-950/50 hover:bg-red-900/50 border border-red-800 px-2.5 py-1 rounded-lg transition">刪除</button>
+          </td>
+        </tr>
+      `;
     }
 
     function renderAccountDistribution(accountTotals, totalTwd) {
@@ -528,6 +638,24 @@
       container.innerHTML = html;
     }
 
+    function populateAccountOptions() {
+      const select = document.getElementById('new-asset-account-select');
+      let html = userAccountsList.map(acc => `<option value="${acc}">${acc}</option>`).join('');
+      html += `<option value="__NEW__">➕ 新增自訂帳戶...</option>`;
+      select.innerHTML = html;
+      document.getElementById('new-asset-account-custom').classList.add('hidden');
+    }
+
+    function handleAccountSelectChange(val) {
+      const customInput = document.getElementById('new-asset-account-custom');
+      if (val === '__NEW__') {
+        customInput.classList.remove('hidden');
+        customInput.focus();
+      } else {
+        customInput.classList.add('hidden');
+      }
+    }
+
     function toggleSymbolInput(type) {
       const symbolContainer = document.getElementById('symbol-container');
       const priceContainer = document.getElementById('price-container');
@@ -551,7 +679,17 @@
       const name = document.getElementById('new-asset-name').value;
       const type = document.getElementById('new-asset-type').value;
       let symbol = document.getElementById('new-asset-symbol').value.trim().toUpperCase();
-      const account = document.getElementById('new-asset-account').value.trim() || '預設帳戶';
+      
+      const accountSelect = document.getElementById('new-asset-account-select').value;
+      let account = accountSelect;
+      if (accountSelect === '__NEW__') {
+        account = document.getElementById('new-asset-account-custom').value.trim();
+        if (!account) return alert('請輸入新帳戶名稱！');
+        if (!userAccountsList.includes(account)) {
+          userAccountsList.push(account);
+        }
+      }
+
       const quantity = parseFloat(document.getElementById('new-asset-qty').value);
       let current_price = parseFloat(document.getElementById('new-asset-price').value) || 1;
       const currency = document.getElementById('new-asset-currency').value;
@@ -723,7 +861,10 @@
 
     function toggleAssetModal(show) {
       document.getElementById('asset-modal').classList.toggle('hidden', !show);
-      if (show) toggleSymbolInput(document.getElementById('new-asset-type').value);
+      if (show) {
+        populateAccountOptions();
+        toggleSymbolInput(document.getElementById('new-asset-type').value);
+      }
     }
 
     window.onload = init;
