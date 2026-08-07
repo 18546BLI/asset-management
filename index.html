@@ -14,7 +14,7 @@
     <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
       <div>
         <h1 class="text-2xl font-bold text-emerald-400">💰 個人資產管理系統</h1>
-        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 台/美/日自動抓價 · 完整匯出與收支連動資產</p>
+        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 台/美/日自動抓價 · 收支連動現金帳戶</p>
       </div>
       <div id="auth-status-header" class="mt-4 md:mt-0"></div>
     </header>
@@ -129,19 +129,19 @@
               <div>
                 <label class="block text-slate-400 mb-1">交易類型</label>
                 <select id="tx-type" onchange="updateTxLinkHint(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-                  <option value="income">💵 收入 (加算至個別資產)</option>
-                  <option value="expense">💸 支出 (從個別資產扣除)</option>
+                  <option value="income">💵 收入 (加算至銀行帳戶)</option>
+                  <option value="expense">💸 支出 (從銀行帳戶扣除)</option>
                   <option value="realize">🔄 資產變現/賣出 (賣出資產轉為現金)</option>
                 </select>
               </div>
 
-              <!-- 🆕 連動資產選擇 -->
+              <!-- 🆕 連動銀行帳戶選擇 (僅列出現金類資產) -->
               <div id="tx-asset-link-container" class="p-3 bg-slate-900/60 border border-slate-700 rounded-xl space-y-2">
-                <label class="block text-xs text-emerald-400 font-semibold" id="tx-asset-link-label">🔗 連動變更之資產 (選填)：</label>
+                <label class="block text-xs text-emerald-400 font-semibold" id="tx-asset-link-label">🏦 連動變更之銀行/現金帳戶 (選填)：</label>
                 <select id="tx-target-asset-id" class="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-2 text-xs">
-                  <option value="">-- 不連動變更資產 (僅純紀錄收支) --</option>
+                  <option value="">-- 不連動變更帳戶 (僅純紀錄收支) --</option>
                 </select>
-                <p id="tx-asset-link-hint" class="text-[11px] text-slate-400">選擇資產後，此筆收入將會自動加總至該資產數量/金額中。</p>
+                <p id="tx-asset-link-hint" class="text-[11px] text-slate-400">選擇銀行帳戶後，此筆收入將會自動加總至該帳戶存款中。</p>
               </div>
 
               <div>
@@ -209,7 +209,7 @@
         </div>
         <div id="symbol-container">
           <label class="block text-slate-400 mb-1">股票代碼 (輸入代碼將自動帶入名稱與幣別)</label>
-          <input type="text" id="new-asset-symbol" oninput="handleSymbolInput(this.value)" placeholder="例如：0050, VOO 或 7203 (豐田)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+          <input type="text" id="new-asset-symbol" oninput="handleSymbolInput(this.value)" placeholder="例如：0050, VOO 或 7203" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
         </div>
         <div>
           <label class="block text-slate-400 mb-1">資產名稱 (系統自動帶入，亦可自行修改)</label>
@@ -456,49 +456,43 @@
       else if (/^\d+$/.test(clean)) currSelect.value = 'TWD';
     }
 
+    // 🔧 強化升級：多管道自動抓股價 API
     async function fetchStockPrice(symbol) {
       if (!symbol) return null;
       let cleanSymbol = symbol.trim().toUpperCase().replace('.TW', '');
 
-      if (cleanSymbol.endsWith('.T') || cleanSymbol.endsWith('.JP')) {
-        try {
-          const ticker = cleanSymbol.split('.')[0] + '.JP';
-          const stooqUrl = `https://stooq.com/q/l/?s=${ticker}&f=sd2t2ohlcv&h&e=csv`;
-          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(stooqUrl)}`);
-          const csvText = await res.text();
-          const lines = csvText.trim().split('\n');
-          if (lines.length > 1) {
-            const closePrice = parseFloat(lines[1].split(',')[6]);
-            if (!isNaN(closePrice) && closePrice > 0) return closePrice;
-          }
-        } catch (e) {}
-      }
-
+      // 1. 台股抓價 (FinMind API)
       if (/^\d+$/.test(cleanSymbol)) {
         try {
           const finmindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${cleanSymbol}&start_date=${getRecentDateStr()}`;
           const res = await fetch(finmindUrl);
           const data = await res.json();
-          if (data && data.data && data.data.length > 0) return data.data[data.data.length - 1].close;
-        } catch (e) {}
-      } else {
-        try {
-          const stooqUrl = `https://stooq.com/q/l/?s=${cleanSymbol}.us&f=sd2t2ohlcv&h&e=csv`;
-          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(stooqUrl)}`);
-          const csvText = await res.text();
-          const lines = csvText.trim().split('\n');
-          if (lines.length > 1) {
-            const closePrice = parseFloat(lines[1].split(',')[6]);
-            if (!isNaN(closePrice) && closePrice > 0) return closePrice;
+          if (data && data.data && data.data.length > 0) {
+            return parseFloat(data.data[data.data.length - 1].close);
           }
         } catch (e) {}
       }
+
+      // 2. 美股與日股抓價 (Yahoo / Query API)
+      let queryTicker = cleanSymbol;
+      if (cleanSymbol.endsWith('.T') || cleanSymbol.endsWith('.JP')) {
+        queryTicker = cleanSymbol.split('.')[0] + '.T';
+      }
+
+      try {
+        const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${queryTicker}`;
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`);
+        const data = await res.json();
+        const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+        if (price && !isNaN(price)) return parseFloat(price);
+      } catch (e) {}
+
       return null;
     }
 
     function getRecentDateStr() {
       const d = new Date();
-      d.setDate(d.getDate() - 7);
+      d.setDate(d.getDate() - 10);
       return d.toISOString().split('T')[0];
     }
 
@@ -514,6 +508,7 @@
         if (!userAccountsList.includes(acc)) userAccountsList.push(acc);
       });
 
+      // 🆕 僅填入「現金 / 銀行存款」至連動選單
       populateTxAssetSelectOptions();
 
       if (!loadedAssets || loadedAssets.length === 0) {
@@ -534,7 +529,7 @@
         if (a.type === 'stock' || a.type === 'fund') {
           if (a.symbol) {
             const livePrice = await fetchStockPrice(a.symbol);
-            if (livePrice !== null) {
+            if (livePrice !== null && livePrice > 0) {
               activePrice = livePrice;
               isLivePrice = true;
             }
@@ -567,18 +562,20 @@
       renderAssetView();
     }
 
-    // 填充連動資產下拉選單
+    // 🆕 僅過濾出「現金/存款 (type === 'cash')」作為收支連動選單
     function populateTxAssetSelectOptions() {
       const select = document.getElementById('tx-target-asset-id');
-      if (!loadedAssets || loadedAssets.length === 0) {
-        select.innerHTML = `<option value="">-- 無可連動資產 --</option>`;
+      const cashAssets = (loadedAssets || []).filter(a => a.type === 'cash');
+
+      if (cashAssets.length === 0) {
+        select.innerHTML = `<option value="">-- 無可用銀行/現金帳戶 (請先至左側新增現金資產) --</option>`;
         return;
       }
 
-      let html = `<option value="">-- 不連動變更資產 (僅純紀錄收支) --</option>`;
-      loadedAssets.forEach(a => {
+      let html = `<option value="">-- 不連動變更帳戶 (僅純紀錄收支) --</option>`;
+      cashAssets.forEach(a => {
         const acc = a.account || '預設帳戶';
-        html += `<option value="${a.id}">[${acc}] ${a.name} (${a.currency || 'TWD'} 存量: ${a.quantity})</option>`;
+        html += `<option value="${a.id}">🏦 [${acc}] ${a.name} (${a.currency || 'TWD'} 餘額: ${Number(a.quantity).toLocaleString()})</option>`;
       });
       select.innerHTML = html;
     }
@@ -588,14 +585,14 @@
       const hint = document.getElementById('tx-asset-link-hint');
 
       if (txType === 'income') {
-        label.innerText = '🔗 連動加算資產 (選填)：';
-        hint.innerText = '選擇後，此筆金額會自動【加總】進指定的現金帳戶或資產中。';
+        label.innerText = '🏦 連動加算銀行/現金帳戶 (選填)：';
+        hint.innerText = '選擇銀行帳戶後，此筆收入將會自動【加總】進該帳戶存款中。';
       } else if (txType === 'expense') {
-        label.innerText = '🔗 連動扣除資產 (選填)：';
-        hint.innerText = '選擇後，此筆金額會自動從指定的現金帳戶或資產【扣除】。';
+        label.innerText = '🏦 連動扣除銀行/現金帳戶 (選填)：';
+        hint.innerText = '選擇銀行帳戶後，此筆支出將會自動從該帳戶存款【扣除】。';
       } else if (txType === 'realize') {
-        label.innerText = '🔗 變現轉入帳戶 (選填)：';
-        hint.innerText = '選擇後，變現賣出的資金會自動【加算】進入指定的現金帳戶中。';
+        label.innerText = '🏦 變現轉入銀行/現金帳戶 (選填)：';
+        hint.innerText = '選擇銀行帳戶後，變現賣出的資金會自動【加算】進入該帳戶中。';
       }
     }
 
@@ -772,9 +769,9 @@
         symbol = '';
         current_price = 1;
         if (!name) {
-          if (currency === 'USD') name = '美金';
-          else if (currency === 'JPY') name = '日圓';
-          else name = '台幣現金';
+          if (currency === 'USD') name = '美金存款';
+          else if (currency === 'JPY') name = '日圓存款';
+          else name = '台幣存款';
         }
       } else {
         if (!name) name = symbol || '未命名資產';
@@ -953,7 +950,7 @@
       }).join('');
     }
 
-    // 💳 處理快速收支登記與【資產連動】
+    // 💳 處理快速收支登記與【現金資產連動】
     async function handleTransaction(e) {
       e.preventDefault();
       if (!currentUser) return alert('請先登入！');
@@ -973,23 +970,23 @@
 
       if (txErr) return alert('紀錄失敗: ' + txErr.message);
 
-      // 2. 若有選擇連動資產，進行資產庫存同步加減
+      // 2. 若有選擇連動銀行存款，進行資產庫存同步加減
       if (targetAssetId) {
         const targetAsset = loadedAssets.find(a => a.id === targetAssetId);
         if (targetAsset) {
           let currentQty = parseFloat(targetAsset.quantity);
           if (type === 'income' || type === 'realize') {
-            currentQty += amount; // 收入/變現 -> 加算資產存量
+            currentQty += amount; // 收入/變現 -> 加算帳戶存款
           } else if (type === 'expense') {
-            currentQty = Math.max(0, currentQty - amount); // 支出 -> 從資產扣除
+            currentQty = Math.max(0, currentQty - amount); // 支出 -> 從帳戶存款扣除
           }
 
           const { error: assetErr } = await supabaseClient.from('assets')
             .update({ quantity: currentQty })
             .eq('id', targetAssetId);
 
-          if (assetErr) alert('收支已紀錄，但連動更新資產失敗: ' + assetErr.message);
-          else alert(`已成功紀錄收支，並自動將「${targetAsset.name}」數量更新為：${currentQty}`);
+          if (assetErr) alert('收支已紀錄，但連動更新銀行存款失敗: ' + assetErr.message);
+          else alert(`已成功紀錄收支，並自動將「${targetAsset.name}」存款餘額更新為：${currentQty}`);
         }
       }
 
