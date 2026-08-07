@@ -83,11 +83,9 @@
 
           <!-- 🔍 查詢與分類檢視工具列 -->
           <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-700/60">
-            <!-- 搜尋框 -->
             <div class="relative flex-1 min-w-[200px]">
               <input type="text" id="asset-search" oninput="renderAssetView()" placeholder="🔍 搜尋名稱、代碼、帳戶或類別..." class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
             </div>
-            <!-- 歸類檢視方式 -->
             <div class="flex items-center gap-2 text-xs">
               <span class="text-slate-400">檢視方式:</span>
               <select id="asset-group-mode" onchange="renderAssetView()" class="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-2 focus:outline-none focus:border-emerald-500">
@@ -122,7 +120,6 @@
 
         <!-- 右側：收支登記與月份明細 (占 5 格) -->
         <div class="lg:col-span-5 space-y-6">
-          <!-- 快速收支登記表單 -->
           <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
             <h2 class="text-xl font-bold text-slate-200 border-b border-slate-700 pb-4">💳 快速收支與變現登記</h2>
             <form id="tx-form" onsubmit="handleTransaction(event)" class="space-y-4 text-sm">
@@ -135,7 +132,6 @@
                 </select>
               </div>
 
-              <!-- 🆕 連動銀行帳戶選擇 (僅列出現金類資產) -->
               <div id="tx-asset-link-container" class="p-3 bg-slate-900/60 border border-slate-700 rounded-xl space-y-2">
                 <label class="block text-xs text-emerald-400 font-semibold" id="tx-asset-link-label">🏦 連動變更之銀行/現金帳戶 (選填)：</label>
                 <select id="tx-target-asset-id" class="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-2 text-xs">
@@ -160,11 +156,9 @@
             </form>
           </div>
 
-          <!-- 收支歷史明細與月份篩選 -->
           <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-3 gap-2">
               <h3 class="text-lg font-bold text-slate-200">📜 收支歷史明細</h3>
-              <!-- 月份選擇器 -->
               <div class="flex items-center gap-2">
                 <span class="text-xs text-slate-400">月份:</span>
                 <select id="tx-month-filter" onchange="renderTransactions()" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg p-1.5">
@@ -173,7 +167,6 @@
               </div>
             </div>
 
-            <!-- 當月統計卡片 -->
             <div id="month-summary" class="grid grid-cols-3 gap-2 text-center text-xs bg-slate-900/40 p-2.5 rounded-xl border border-slate-700/40">
               <div><span class="text-slate-400 block">總收入</span><span id="sum-income" class="text-emerald-400 font-bold">NT$ 0</span></div>
               <div><span class="text-slate-400 block">總支出</span><span id="sum-expense" class="text-rose-400 font-bold">NT$ 0</span></div>
@@ -456,7 +449,7 @@
       else if (/^\d+$/.test(clean)) currSelect.value = 'TWD';
     }
 
-    // 🔧 強化升級：多管道自動抓股價 API
+    // 🌐 升級：全市場 (台/美/日) 穩定抓價邏輯
     async function fetchStockPrice(symbol) {
       if (!symbol) return null;
       let cleanSymbol = symbol.trim().toUpperCase().replace('.TW', '');
@@ -473,18 +466,31 @@
         } catch (e) {}
       }
 
-      // 2. 美股與日股抓價 (Yahoo / Query API)
-      let queryTicker = cleanSymbol;
+      // 2. 美股與日股抓價 (使用 Stooq API - 支援全球股票)
+      let stooqTicker = cleanSymbol.toLowerCase() + '.us';
       if (cleanSymbol.endsWith('.T') || cleanSymbol.endsWith('.JP')) {
-        queryTicker = cleanSymbol.split('.')[0] + '.T';
+        stooqTicker = cleanSymbol.split('.')[0].toLowerCase() + '.jp';
       }
 
       try {
-        const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${queryTicker}`;
-        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`);
+        const stooqUrl = `https://stooq.com/q/l/?s=${stooqTicker}&f=sdal12c&h&e=json`;
+        const res = await fetch(stooqUrl);
+        const data = await res.json();
+        const price = data?.symbols?.[0]?.close;
+        if (price && !isNaN(price) && price > 0) {
+          return parseFloat(price);
+        }
+      } catch (e) {}
+
+      // 3. 備援抓價 (當美股 Stooq 繁忙時使用 Alpha/Financial 備用網址)
+      try {
+        const backupUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}`;
+        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(backupUrl)}`);
         const data = await res.json();
         const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        if (price && !isNaN(price)) return parseFloat(price);
+        if (price && !isNaN(price) && price > 0) {
+          return parseFloat(price);
+        }
       } catch (e) {}
 
       return null;
@@ -508,7 +514,6 @@
         if (!userAccountsList.includes(acc)) userAccountsList.push(acc);
       });
 
-      // 🆕 僅填入「現金 / 銀行存款」至連動選單
       populateTxAssetSelectOptions();
 
       if (!loadedAssets || loadedAssets.length === 0) {
@@ -562,7 +567,6 @@
       renderAssetView();
     }
 
-    // 🆕 僅過濾出「現金/存款 (type === 'cash')」作為收支連動選單
     function populateTxAssetSelectOptions() {
       const select = document.getElementById('tx-target-asset-id');
       const cashAssets = (loadedAssets || []).filter(a => a.type === 'cash');
@@ -811,7 +815,6 @@
       }
     }
 
-    // ⚙️ 資產手動微調/增減邏輯
     function openAdjustModal(assetId, assetName, currentQty) {
       document.getElementById('adjust-asset-id').value = assetId;
       document.getElementById('adjust-title').innerText = `⚙️ 調整: ${assetName}`;
@@ -950,7 +953,6 @@
       }).join('');
     }
 
-    // 💳 處理快速收支登記與【現金資產連動】
     async function handleTransaction(e) {
       e.preventDefault();
       if (!currentUser) return alert('請先登入！');
@@ -963,22 +965,20 @@
 
       const created_at = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
 
-      // 1. 先寫入收支紀錄 Table
       const { error: txErr } = await supabaseClient.from('transactions').insert([{
         user_id: currentUser.id, type, category, amount, created_at
       }]);
 
       if (txErr) return alert('紀錄失敗: ' + txErr.message);
 
-      // 2. 若有選擇連動銀行存款，進行資產庫存同步加減
       if (targetAssetId) {
         const targetAsset = loadedAssets.find(a => a.id === targetAssetId);
         if (targetAsset) {
           let currentQty = parseFloat(targetAsset.quantity);
           if (type === 'income' || type === 'realize') {
-            currentQty += amount; // 收入/變現 -> 加算帳戶存款
+            currentQty += amount;
           } else if (type === 'expense') {
-            currentQty = Math.max(0, currentQty - amount); // 支出 -> 從帳戶存款扣除
+            currentQty = Math.max(0, currentQty - amount);
           }
 
           const { error: assetErr } = await supabaseClient.from('assets')
@@ -993,7 +993,7 @@
       document.getElementById('tx-category').value = '';
       document.getElementById('tx-amount').value = '';
       loadTransactions();
-      loadAssets(); // 重新整理資產畫面
+      loadAssets();
     }
 
     async function deleteTransaction(id) {
