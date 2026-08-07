@@ -14,7 +14,7 @@
     <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
       <div>
         <h1 class="text-2xl font-bold text-emerald-400">💰 個人資產管理系統</h1>
-        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · Yahoo Finance 自動抓價 · 收支明細追蹤</p>
+        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 自動即時抓價 · 月份收支明細追蹤</p>
       </div>
       <div id="auth-status-header" class="mt-4 md:mt-0"></div>
     </header>
@@ -70,7 +70,7 @@
                   <th class="p-3">名稱 / 代碼</th>
                   <th class="p-3">類別</th>
                   <th class="p-3">數量</th>
-                  <th class="p-3">最新價格 (Yahoo)</th>
+                  <th class="p-3">最新價格</th>
                   <th class="p-3">折算台幣</th>
                   <th class="p-3 text-center">操作</th>
                 </tr>
@@ -82,7 +82,7 @@
           </div>
         </div>
 
-        <!-- 右側：收支登記與歷史明細 (占 5 格) -->
+        <!-- 右側：收支登記與月分明細 (占 5 格) -->
         <div class="lg:col-span-5 space-y-6">
           <!-- 快速收支登記表單 -->
           <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
@@ -104,17 +104,35 @@
                 <label class="block text-slate-400 mb-1">金額 (TWD)</label>
                 <input type="number" id="tx-amount" step="any" placeholder="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
               </div>
+              <div>
+                <label class="block text-slate-400 mb-1">日期</label>
+                <input type="date" id="tx-date" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+              </div>
               <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl transition">紀錄並更新</button>
             </form>
           </div>
 
-          <!-- 收支歷史明細列表 -->
+          <!-- 收支歷史明細與月份篩選 -->
           <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
-            <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-3 gap-2">
               <h3 class="text-lg font-bold text-slate-200">📜 收支歷史明細</h3>
-              <button onclick="loadTransactions()" class="text-xs text-slate-400 hover:text-slate-200">🔄 整理</button>
+              <!-- 月份選擇器 -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">月份:</span>
+                <select id="tx-month-filter" onchange="renderTransactions()" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg p-1.5">
+                  <option value="all">全部紀錄</option>
+                </select>
+              </div>
             </div>
-            <div class="overflow-y-auto max-h-64 space-y-2" id="tx-list">
+
+            <!-- 當月統計卡片 -->
+            <div id="month-summary" class="grid grid-cols-3 gap-2 text-center text-xs bg-slate-900/40 p-2.5 rounded-xl border border-slate-700/40">
+              <div><span class="text-slate-400 block">總收入</span><span id="sum-income" class="text-emerald-400 font-bold">NT$ 0</span></div>
+              <div><span class="text-slate-400 block">總支出</span><span id="sum-expense" class="text-rose-400 font-bold">NT$ 0</span></div>
+              <div><span class="text-slate-400 block">淨額</span><span id="sum-net" class="text-blue-400 font-bold">NT$ 0</span></div>
+            </div>
+
+            <div class="overflow-y-auto max-h-64 space-y-2 pr-1" id="tx-list">
               <div class="text-center p-4 text-slate-500 text-xs">載入紀錄中...</div>
             </div>
           </div>
@@ -138,7 +156,7 @@
         <div>
           <label class="block text-slate-400 mb-1">代碼 (Yahoo 代碼)</label>
           <input type="text" id="new-asset-symbol" placeholder="台股填 0050.TW，美股填 VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-          <p class="text-xs text-slate-400 mt-1">※ 台股/ETF 請加 `.TW`（如 `0050.TW`、`2330.TW`），美股直接填代碼（如 `VOO`）。</p>
+          <p class="text-xs text-slate-400 mt-1">※ 台股/ETF 請輸入代碼如 `0050` 或 `0050.TW`；美股直接填代碼如 `VOO`。</p>
         </div>
         <div>
           <label class="block text-slate-400 mb-1">資產類別</label>
@@ -181,6 +199,7 @@
     let currentUsdRate = 32.26;
     let currentUser = null;
     let authMode = 'login';
+    let rawTransactions = []; // 快存收支紀錄
 
     const typeMap = {
       'stock': '股票/ETF',
@@ -191,6 +210,8 @@
     };
 
     async function init() {
+      // 預設日期為今天
+      document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
       await fetchRates();
       const { data: { user } } = await supabaseClient.auth.getUser();
       currentUser = user;
@@ -260,7 +281,7 @@
       }
     }
 
-    // 透過 CORS 代理連線 Yahoo Finance 抓取最新股價
+    // 強化版跨網域 (CORS) 抓價邏輯，帶有雙重代理備用
     async function fetchYahooPrice(symbol) {
       if (!symbol) return null;
       let cleanSymbol = symbol.trim().toUpperCase();
@@ -268,19 +289,30 @@
         cleanSymbol += '.TW';
       }
 
-      const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}`;
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-
+      const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}?interval=1d`;
+      
+      // 代理 1: corsproxy.io
       try {
-        const response = await fetch(proxyUrl);
-        const proxyData = await response.json();
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
+        const data = await res.json();
+        const price = data.chart.result[0].meta.regularMarketPrice;
+        if (price) return price;
+      } catch (e) {
+        console.warn('Proxy 1 failed, trying Backup Proxy...');
+      }
+
+      // 代理 2: allorigins
+      try {
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
+        const proxyData = await res.json();
         const data = JSON.parse(proxyData.contents);
         const price = data.chart.result[0].meta.regularMarketPrice;
-        return price || null;
-      } catch (err) {
-        console.warn(`無法抓取 ${cleanSymbol} 價格:`, err);
-        return null;
+        if (price) return price;
+      } catch (e) {
+        console.error(`無法抓取 ${cleanSymbol} 價格:`, e);
       }
+
+      return null;
     }
 
     async function loadAssets() {
@@ -295,7 +327,7 @@
         return;
       }
 
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-slate-400">正在連線 Yahoo Finance 抓取最新股價...</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-slate-400">正在獲取最新即時價格...</td></tr>`;
 
       let totalTwd = 0;
       let tableRows = '';
@@ -324,7 +356,7 @@
             <td class="p-3">${a.quantity}</td>
             <td class="p-3 font-medium ${isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
               ${a.currency} ${Number(activePrice).toFixed(2)}
-              ${isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : ''}
+              ${isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>'}
             </td>
             <td class="p-3 font-semibold text-emerald-400">NT$ ${Math.round(twdVal).toLocaleString()}</td>
             <td class="p-3 text-center">
@@ -341,15 +373,70 @@
     async function loadTransactions() {
       if (!currentUser) return;
       const { data: txs, error } = await supabaseClient.from('transactions').select('*').order('created_at', { ascending: false });
-      const container = document.getElementById('tx-list');
-
+      
       if (error) {
-        container.innerHTML = `<div class="text-xs text-red-400 p-2">載入明細失敗（請確認 transactions 資料表與 RLS 設定）</div>`;
+        document.getElementById('tx-list').innerHTML = `<div class="text-xs text-red-400 p-2">載入明細失敗：${error.message}</div>`;
         return;
       }
 
-      if (!txs || txs.length === 0) {
-        container.innerHTML = `<div class="text-center p-4 text-slate-500 text-xs">目前尚無收支明細紀錄</div>`;
+      rawTransactions = txs || [];
+      updateMonthFilterOptions();
+      renderTransactions();
+    }
+
+    // 更新「月份選單」選項
+    function updateMonthFilterOptions() {
+      const select = document.getElementById('tx-month-filter');
+      const currentSelected = select.value;
+      const monthsSet = new Set();
+
+      rawTransactions.forEach(t => {
+        const dateObj = t.created_at ? new Date(t.created_at) : new Date();
+        const mStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+        monthsSet.add(mStr);
+      });
+
+      const sortedMonths = Array.from(monthsSet).sort().reverse();
+      let html = `<option value="all">全部紀錄</option>`;
+      sortedMonths.forEach(m => {
+        html += `<option value="${m}">${m}</option>`;
+      });
+
+      select.innerHTML = html;
+      if (Array.from(select.options).some(o => o.value === currentSelected)) {
+        select.value = currentSelected;
+      }
+    }
+
+    // 渲染收支明細與當月統計
+    function renderTransactions() {
+      const selectedMonth = document.getElementById('tx-month-filter').value;
+      const container = document.getElementById('tx-list');
+
+      let filtered = rawTransactions;
+      if (selectedMonth !== 'all') {
+        filtered = rawTransactions.filter(t => {
+          const dateObj = t.created_at ? new Date(t.created_at) : new Date();
+          const mStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+          return mStr === selectedMonth;
+        });
+      }
+
+      // 統計月度金額
+      let incSum = 0, expSum = 0;
+      filtered.forEach(t => {
+        const amt = Number(t.amount) || 0;
+        if (t.type === 'income') incSum += amt;
+        else if (t.type === 'expense') expSum += amt;
+        else if (t.type === 'realize') incSum += amt; // 變現預設算入現金流入
+      });
+
+      document.getElementById('sum-income').innerText = 'NT$ ' + Math.round(incSum).toLocaleString();
+      document.getElementById('sum-expense').innerText = 'NT$ ' + Math.round(expSum).toLocaleString();
+      document.getElementById('sum-net').innerText = 'NT$ ' + Math.round(incSum - expSum).toLocaleString();
+
+      if (!filtered || filtered.length === 0) {
+        container.innerHTML = `<div class="text-center p-4 text-slate-500 text-xs">該月份尚無收支紀錄</div>`;
         return;
       }
 
@@ -359,18 +446,21 @@
         'realize': { label: '變現', color: 'text-blue-400 bg-blue-950/60 border-blue-700' }
       };
 
-      container.innerHTML = txs.map(t => {
+      container.innerHTML = filtered.map(t => {
         const badge = txTypeBadge[t.type] || { label: t.type, color: 'text-slate-300 bg-slate-800 border-slate-600' };
         const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
         return `
           <div class="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-xl border border-slate-700/50 text-xs">
             <div class="flex items-center gap-2">
               <span class="px-2 py-0.5 rounded border ${badge.color}">${badge.label}</span>
-              <span class="font-medium text-slate-200">${t.category}</span>
+              <div>
+                <div class="font-medium text-slate-200">${t.category}</div>
+                <div class="text-[10px] text-slate-500">${dateStr}</div>
+              </div>
             </div>
             <div class="flex items-center gap-3">
               <span class="font-bold text-slate-100">NT$ ${Number(t.amount).toLocaleString()}</span>
-              <button onclick="deleteTransaction('${t.id}')" class="text-slate-500 hover:text-red-400 transition">✕</button>
+              <button onclick="deleteTransaction('${t.id}')" class="text-slate-500 hover:text-red-400 transition p-1">✕</button>
             </div>
           </div>
         `;
@@ -388,7 +478,6 @@
       const current_price = parseFloat(document.getElementById('new-asset-price').value);
       const currency = document.getElementById('new-asset-currency').value;
 
-      // 自動補齊台股代碼尾綴 .TW
       if (symbol && /^\d{4,6}$/.test(symbol)) {
         symbol += '.TW';
       }
@@ -418,14 +507,18 @@
       const type = document.getElementById('tx-type').value;
       const category = document.getElementById('tx-category').value;
       const amount = parseFloat(document.getElementById('tx-amount').value);
+      const dateVal = document.getElementById('tx-date').value;
+
+      const created_at = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
 
       const { error } = await supabaseClient.from('transactions').insert([{
-        user_id: currentUser.id, type, category, amount
+        user_id: currentUser.id, type, category, amount, created_at
       }]);
 
-      if (error) alert('紀錄失敗: ' + error.message);
+      if (error) alert('紀錄失敗: ' + error.message + '\n（請確保 Supabase 的 transactions 資料表已建立且開啟權限）');
       else {
-        document.getElementById('tx-form').reset();
+        document.getElementById('tx-category').value = '';
+        document.getElementById('tx-amount').value = '';
         loadTransactions();
       }
     }
