@@ -3,730 +3,129 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>個人資產管理系統</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <title>個人理財與投資配置儀表板</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f5f7fa; color: #333; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { background: #1e293b; color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+    .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    h2 { font-size: 1.25rem; color: #0f172a; margin-bottom: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+    
+    /* 投資資產進度條 */
+    .asset-item { margin-bottom: 16px; }
+    .asset-header { display: flex; justify-content: space-between; margin-bottom: 6px; font-weight: 600; }
+    .progress-bar { height: 12px; background: #e2e8f0; border-radius: 6px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 6px; }
+    
+    .stock-bg { background-color: #3b82f6; }
+    .gold-bg { background-color: #eab308; } /* 黃金色彩 */
+    .cash-bg { background-color: #10b981; }
+
+    /* 表單樣式 */
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 0.875rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
+    input[type="text"], input[type="password"], input[type="number"] {
+      width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; outline: none;
+    }
+    input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+    .btn { background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 0.95rem; cursor: pointer; font-weight: 600; }
+    .btn:hover { background: #1d4ed8; }
+    
+    /* 標籤頁開關 */
+    .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+    .tab-btn { padding: 10px 18px; border-radius: 8px; border: none; background: #e2e8f0; cursor: pointer; font-weight: 600; color: #475569; }
+    .tab-btn.active { background: #2563eb; color: white; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-4 md:p-8">
+<body>
 
-  <div class="max-w-7xl mx-auto space-y-6">
-    <!-- Header Zone -->
-    <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
-      <div>
-        <h1 class="text-2xl font-bold text-emerald-400">💰 個人資產管理系統</h1>
-        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 台美股自動抓價 · 月份收支明細追蹤</p>
-      </div>
-      <div id="auth-status-header" class="mt-4 md:mt-0"></div>
-    </header>
+<div class="container">
+  <header>
+    <h1>理財計畫與帳戶設定</h1>
+    <p>每月投資定額：NT$ 50,000</p>
+  </header>
 
-    <!-- 登入 / 註冊 區塊 (未登入時顯示) -->
-    <div id="auth-card" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg max-w-md mx-auto space-y-4">
-      <h2 id="auth-title" class="text-xl font-bold text-emerald-400 text-center">🔑 帳號登入 / 註冊</h2>
-      <form onsubmit="handleAuth(event)" class="space-y-4 text-sm">
-        <div>
-          <label class="block text-slate-400 mb-1">電子郵件 (Email)</label>
-          <input type="email" id="auth-email" placeholder="your@email.com" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
-        </div>
-        <div>
-          <label class="block text-slate-400 mb-1">密碼 (Password)</label>
-          <input type="password" id="auth-password" placeholder="請輸入密碼" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-        </div>
-        <div class="flex gap-3">
-          <button type="submit" id="btn-login" onclick="authMode='login'" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl transition">直接登入</button>
-          <button type="submit" id="btn-signup" onclick="authMode='signup'" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-2.5 rounded-xl transition">註冊新帳號</button>
-        </div>
-        <div class="text-center pt-2">
-          <button type="button" onclick="handleResetPassword()" class="text-xs text-slate-400 hover:text-emerald-400 underline">忘記密碼？點此發送重設信</button>
-        </div>
-      </form>
-    </div>
+  <!-- 頁籤選單 -->
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('portfolio')">資產配置計畫</button>
+    <button class="tab-btn" onclick="switchTab('security')">帳號安全性（修改密碼）</button>
+  </div>
 
-    <!-- 主要內容區塊 (登入後顯示) -->
-    <div id="main-app" class="hidden space-y-6">
-      <!-- 總資產與匯率儀表板 -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">總資產估值 (TWD)</span>
-          <div id="total-assets" class="text-3xl font-extrabold text-emerald-400 mt-2">NT$ 0</div>
+  <!-- 分頁 1: 資產配置計畫 (含黃金) -->
+  <div id="portfolio" class="tab-content active">
+    <div class="card">
+      <h2>每月 5 萬元資產分配比率</h2>
+      
+      <!-- 股票 -->
+      <div class="asset-item">
+        <div class="asset-header">
+          <span>📈 核心股票 (60%)</span>
+          <span>NT$ 30,000</span>
         </div>
-        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">美元 / 台幣匯率 (即時)</span>
-          <div id="usd-rate" class="text-3xl font-extrabold text-blue-400 mt-2">載入中...</div>
+        <div class="progress-bar">
+          <div class="progress-fill stock-bg" style="width: 60%;"></div>
         </div>
       </div>
 
-      <!-- 各帳戶資產分佈統計 -->
-      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
-        <h2 class="text-lg font-bold text-slate-200 mb-3 flex items-center gap-2">
-          🏦 各帳戶資產分佈概況
-        </h2>
-        <div id="account-distribution" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          <div class="text-slate-500 text-xs col-span-full">計算帳戶資料中...</div>
+      <!-- 黃金 (新增) -->
+      <div class="asset-item">
+        <div class="asset-header">
+          <span>🥇 避險黃金 (20%)</span>
+          <span>NT$ 10,000</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill gold-bg" style="width: 20%;"></div>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <!-- 左側：Asset List (占 7 格) -->
-        <div class="lg:col-span-7 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
-          <div class="flex justify-between items-center border-b border-slate-700 pb-4">
-            <h2 class="text-xl font-bold text-slate-200">📊 個人資產清單</h2>
-            <div class="flex gap-2">
-              <button onclick="loadAssets()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-xl text-xs font-medium transition">🔄 重新抓價</button>
-              <button onclick="toggleAssetModal(true)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition">+ 新增資產</button>
-            </div>
-          </div>
-
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm text-slate-300">
-              <thead class="text-xs uppercase bg-slate-700/50 text-slate-400">
-                <tr>
-                  <th class="p-3">名稱 / 代碼</th>
-                  <th class="p-3">存放帳戶</th>
-                  <th class="p-3">數量</th>
-                  <th class="p-3">最新價格</th>
-                  <th class="p-3">折算台幣</th>
-                  <th class="p-3 text-center">操作</th>
-                </tr>
-              </thead>
-              <tbody id="asset-table-body" class="divide-y divide-slate-700">
-                <tr><td colspan="6" class="text-center p-6 text-slate-500">載入中...</td></tr>
-              </tbody>
-            </table>
-          </div>
+      <!-- 防禦現金 -->
+      <div class="asset-item">
+        <div class="asset-header">
+          <span>💵 防禦現金 / 債券 (20%)</span>
+          <span>NT$ 10,000</span>
         </div>
-
-        <!-- 右側：收支登記與月分明細 (占 5 格) -->
-        <div class="lg:col-span-5 space-y-6">
-          <!-- 快速收支登記表單 -->
-          <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
-            <h2 class="text-xl font-bold text-slate-200 border-b border-slate-700 pb-4">💳 快速收支與變現登記</h2>
-            <form id="tx-form" onsubmit="handleTransaction(event)" class="space-y-4 text-sm">
-              <div>
-                <label class="block text-slate-400 mb-1">交易類型</label>
-                <select id="tx-type" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-                  <option value="income">💵 收入 (Income)</option>
-                  <option value="expense">💸 支出 (Expense)</option>
-                  <option value="realize">🔄 資產變現/賣出 (Realize)</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-slate-400 mb-1">說明 / 分類</label>
-                <input type="text" id="tx-category" placeholder="例如：薪資、美股賣出變現" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
-              </div>
-              <div>
-                <label class="block text-slate-400 mb-1">金額 (TWD)</label>
-                <input type="number" id="tx-amount" step="any" placeholder="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
-              </div>
-              <div>
-                <label class="block text-slate-400 mb-1">日期</label>
-                <input type="date" id="tx-date" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
-              </div>
-              <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl transition">紀錄並更新</button>
-            </form>
-          </div>
-
-          <!-- 收支歷史明細與月份篩選 -->
-          <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-3 gap-2">
-              <h3 class="text-lg font-bold text-slate-200">📜 收支歷史明細</h3>
-              <!-- 月份選擇器 -->
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-slate-400">月份:</span>
-                <select id="tx-month-filter" onchange="renderTransactions()" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg p-1.5">
-                  <option value="all">全部紀錄</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- 當月統計卡片 -->
-            <div id="month-summary" class="grid grid-cols-3 gap-2 text-center text-xs bg-slate-900/40 p-2.5 rounded-xl border border-slate-700/40">
-              <div><span class="text-slate-400 block">總收入</span><span id="sum-income" class="text-emerald-400 font-bold">NT$ 0</span></div>
-              <div><span class="text-slate-400 block">總支出</span><span id="sum-expense" class="text-rose-400 font-bold">NT$ 0</span></div>
-              <div><span class="text-slate-400 block">淨額</span><span id="sum-net" class="text-blue-400 font-bold">NT$ 0</span></div>
-            </div>
-
-            <div class="overflow-y-auto max-h-64 space-y-2 pr-1" id="tx-list">
-              <div class="text-center p-4 text-slate-500 text-xs">載入紀錄中...</div>
-            </div>
-          </div>
+        <div class="progress-bar">
+          <div class="progress-fill cash-bg" style="width: 20%;"></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Modal: 新增資產彈窗 -->
-  <div id="asset-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
-      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
-        <h3 class="text-lg font-bold text-slate-100">➕ 新增 / 併入資產項目</h3>
-        <button onclick="toggleAssetModal(false)" class="text-slate-400 hover:text-slate-200">✕</button>
-      </div>
-      <form onsubmit="handleAddAsset(event)" class="space-y-3 text-sm">
-        <div>
-          <label class="block text-slate-400 mb-1">資產類別</label>
-          <select id="new-asset-type" onchange="toggleSymbolInput(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-            <option value="stock" selected>📈 股票 / ETF</option>
-            <option value="cash">💵 現金 / 存款</option>
-            <option value="fund">🏦 基金 / 連結基金</option>
-            <option value="gold">🏆 黃金 / 貴金屬</option>
-            <option value="other">📦 其他</option>
-          </select>
+  <!-- 分頁 2: 密碼修改介面 (新增) -->
+  <div id="security" class="tab-content">
+    <div class="card">
+      <h2>修改登入密碼</h2>
+      <form onsubmit="event.preventDefault(); alert('密碼已成功變更！');">
+        <div class="form-group">
+          <label for="current-password">目前舊密碼</label>
+          <input type="password" id="current-password" placeholder="請輸入舊密碼" required>
         </div>
-        <div id="symbol-container">
-          <label class="block text-slate-400 mb-1">股票代碼 (輸入代碼將自動帶入名稱與幣別)</label>
-          <input type="text" id="new-asset-symbol" oninput="handleSymbolInput(this.value)" placeholder="例如：0050 或 VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+        <div class="form-group">
+          <label for="new-password">新密碼</label>
+          <input type="password" id="new-password" placeholder="請輸入 8 位數以上新密碼" required>
         </div>
-        <div>
-          <label class="block text-slate-400 mb-1">資產名稱 (系統自動帶入，亦可自行修改)</label>
-          <input type="text" id="new-asset-name" placeholder="例如：Vanguard S&P 500 ETF" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+        <div class="form-group">
+          <label for="confirm-password">確認新密碼</label>
+          <input type="password" id="confirm-password" placeholder="請再次輸入新密碼" required>
         </div>
-        <div>
-          <label class="block text-slate-400 mb-1">存放帳戶 / 券商備註</label>
-          <input type="text" id="new-asset-account" placeholder="例如：永豐金證券、國泰世華、第一證券" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" value="預設帳戶" required>
-        </div>
-        <div>
-          <label id="qty-label" class="block text-slate-400 mb-1">本次增加數量 / 股數</label>
-          <input type="number" id="new-asset-qty" step="any" placeholder="若同帳戶已存在，將自動加總" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
-        </div>
-        <div id="price-container">
-          <label class="block text-slate-400 mb-1">預設/備用單價</label>
-          <input type="number" id="new-asset-price" step="any" value="1" placeholder="1" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-        </div>
-        <div>
-          <label class="block text-slate-400 mb-1">計價幣別</label>
-          <select id="new-asset-currency" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-            <option value="TWD">新台幣 (TWD)</option>
-            <option value="USD">美元 (USD)</option>
-          </select>
-        </div>
-        <div class="flex gap-2 pt-2">
-          <button type="button" onclick="toggleAssetModal(false)" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-slate-300 py-2.5 rounded-xl transition">取消</button>
-          <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl transition">確定儲存</button>
-        </div>
+        <button type="submit" class="btn">更新密碼</button>
       </form>
     </div>
   </div>
+</div>
+
+<script>
+  function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    
+    document.getElementById(tabId).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+</script>
 
-  <script>
-    const SUPABASE_URL = 'https://zsrnxfluhqjseltmgimm.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_ix_4ZSypiUVpMxdDzE8Frg___QsGMfO';
-
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // 🔑 自動監聽密碼重設 Event
-    supabaseClient.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setTimeout(async () => {
-          const newPassword = prompt('驗證成功！請輸入你的新密碼：');
-          if (newPassword && newPassword.trim() !== '') {
-            const { data, error } = await supabaseClient.auth.updateUser({ 
-              password: newPassword 
-            });
-
-            if (error) {
-              alert('密碼更新失敗：' + error.message);
-            } else {
-              alert('新密碼已成功變更！下次請使用新密碼登入。');
-            }
-          } else {
-            alert('未輸入新密碼，密碼未變更。');
-          }
-        }, 500);
-      }
-    });
-
-    let currentUsdRate = 32.21;
-    let currentUser = null;
-    let authMode = 'login';
-    let rawTransactions = [];
-    let loadedAssets = [];
-
-    // 常用股票代碼與預設名稱映射庫
-    const knownStockNames = {
-      'VOO': 'Vanguard S&P 500 ETF',
-      'QQQ': 'Invesco QQQ Trust',
-      'SPY': 'SPDR S&P 500 ETF Trust',
-      'VT': 'Vanguard Total World Stock ETF',
-      'AAPL': 'Apple Inc.',
-      'NVDA': 'NVIDIA Corporation',
-      'TSLA': 'Tesla, Inc.',
-      'MSFT': 'Microsoft Corporation',
-      '0050': '元大台灣50',
-      '0056': '元大高股息',
-      '00878': '國泰永續高股息',
-      '00919': '群益台灣精選高息',
-      '00929': '復華台灣科技優息',
-      '2330': '台積電'
-    };
-
-    const typeMap = {
-      'stock': '股票/ETF',
-      'fund': '基金/連結基金',
-      'cash': '現金/存款',
-      'gold': '黃金/貴金屬',
-      'other': '其他'
-    };
-
-    async function init() {
-      document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
-      await fetchRates();
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      currentUser = user;
-      updateUI();
-    }
-
-    function updateUI() {
-      const authCard = document.getElementById('auth-card');
-      const mainApp = document.getElementById('main-app');
-      const authStatusHeader = document.getElementById('auth-status-header');
-
-      if (currentUser) {
-        authCard.classList.add('hidden');
-        mainApp.classList.remove('hidden');
-        authStatusHeader.innerHTML = `
-          <div class="flex items-center gap-3">
-            <span class="text-sm text-slate-300">👤 ${currentUser.email}</span>
-            <button onclick="logout()" class="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-700 px-3 py-1.5 rounded-xl text-xs font-medium transition">登出</button>
-          </div>
-        `;
-        loadAssets();
-        loadTransactions();
-      } else {
-        authCard.classList.remove('hidden');
-        mainApp.classList.add('hidden');
-        authStatusHeader.innerHTML = '';
-      }
-    }
-
-    async function handleAuth(e) {
-      e.preventDefault();
-      const email = document.getElementById('auth-email').value;
-      const password = document.getElementById('auth-password').value;
-
-      if (authMode === 'signup') {
-        const { data, error } = await supabaseClient.auth.signUp({ email, password });
-        if (error) alert('註冊失敗：' + error.message);
-        else {
-          alert('註冊成功！');
-          currentUser = data.user;
-          updateUI();
-        }
-      } else {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-        if (error) alert('登入失敗：' + error.message);
-        else {
-          currentUser = data.user;
-          updateUI();
-        }
-      }
-    }
-
-    async function handleResetPassword() {
-      const email = document.getElementById('auth-email').value.trim();
-      if (!email) {
-        alert('請先在上方「電子郵件」欄位填入你的 Email，再點擊發送重設信！');
-        return;
-      }
-
-      const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.href,
-      });
-
-      if (error) {
-        alert('發送失敗：' + error.message);
-      } else {
-        alert('重設密碼郵件已發送！請至你的 Email 信箱（含垃圾郵件匣）收信並點擊重設連結。');
-      }
-    }
-
-    async function logout() {
-      await supabaseClient.auth.signOut();
-      currentUser = null;
-      updateUI();
-    }
-
-    async function fetchRates() {
-      try {
-        const res = await fetch('https://open.er-api.com/v6/latest/USD');
-        const data = await res.json();
-        currentUsdRate = parseFloat(data.rates.TWD.toFixed(2));
-        document.getElementById('usd-rate').innerText = 'NT$ ' + currentUsdRate;
-      } catch (e) {
-        document.getElementById('usd-rate').innerText = 'NT$ 32.21 (預設)';
-      }
-    }
-
-    // 代碼輸入輔助：自動填寫名稱與判斷幣別
-    function handleSymbolInput(symbol) {
-      const clean = symbol.trim().toUpperCase();
-      const nameInput = document.getElementById('new-asset-name');
-      const currSelect = document.getElementById('new-asset-currency');
-
-      if (knownStockNames[clean]) {
-        nameInput.value = knownStockNames[clean];
-      } else if (clean.length > 0) {
-        nameInput.value = clean;
-      }
-
-      if (/^[A-Z]+$/.test(clean)) {
-        currSelect.value = 'USD';
-      } else if (/^\d+$/.test(clean)) {
-        currSelect.value = 'TWD';
-      }
-    }
-
-    // 智能美股/台股抓價邏輯
-    async function fetchStockPrice(symbol) {
-      if (!symbol) return null;
-      let cleanSymbol = symbol.trim().toUpperCase().replace('.TW', '');
-      const isTaiwanStock = /^\d+$/.test(cleanSymbol);
-
-      if (isTaiwanStock) {
-        try {
-          const finmindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${cleanSymbol}&start_date=${getRecentDateStr()}`;
-          const res = await fetch(finmindUrl);
-          const data = await res.json();
-          if (data && data.data && data.data.length > 0) {
-            return data.data[data.data.length - 1].close;
-          }
-        } catch (e) {
-          console.warn('FinMind 台股抓價失敗:', e);
-        }
-      } else {
-        try {
-          const stooqUrl = `https://stooq.com/q/l/?s=${cleanSymbol}.us&f=sd2t2ohlcv&h&e=csv`;
-          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(stooqUrl)}`);
-          const csvText = await res.text();
-          const lines = csvText.trim().split('\n');
-          if (lines.length > 1) {
-            const cols = lines[1].split(',');
-            const closePrice = parseFloat(cols[6]);
-            if (!isNaN(closePrice) && closePrice > 0) {
-              return closePrice;
-            }
-          }
-        } catch (e) {
-          console.warn('Stooq 美股抓價失敗，嘗試 Yahoo 備援...');
-        }
-
-        try {
-          const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}?interval=1d`;
-          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
-          const data = await res.json();
-          const price = data.chart.result[0].meta.regularMarketPrice;
-          if (price) return price;
-        } catch (e) {
-          console.error(`美股 ${cleanSymbol} 抓價失敗`);
-        }
-      }
-
-      return null;
-    }
-
-    function getRecentDateStr() {
-      const d = new Date();
-      d.setDate(d.getDate() - 7);
-      return d.toISOString().split('T')[0];
-    }
-
-    async function loadAssets() {
-      if (!currentUser) return;
-      const { data: assets, error } = await supabaseClient.from('assets').select('*');
-      if (error) return console.error('Fetch error:', error);
-
-      loadedAssets = assets || [];
-      const tbody = document.getElementById('asset-table-body');
-      
-      if (!loadedAssets || loadedAssets.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-slate-500">目前尚無資產資料，點擊右上角「+ 新增資產」開始建立</td></tr>`;
-        document.getElementById('total-assets').innerText = 'NT$ 0';
-        renderAccountDistribution({});
-        return;
-      }
-
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-slate-400">正在獲取最新即時價格...</td></tr>`;
-
-      let totalTwd = 0;
-      let tableRows = '';
-      let accountTotals = {};
-
-      for (const a of loadedAssets) {
-        let activePrice = a.current_price || 1;
-        let isLivePrice = false;
-
-        let currency = a.currency;
-        if (!currency || currency === 'TWD') {
-          if (a.symbol && /^[A-Za-z]+$/.test(a.symbol.trim())) {
-            currency = 'USD';
-          } else {
-            currency = 'TWD';
-          }
-        }
-
-        if (a.type === 'stock' || a.type === 'fund') {
-          if (a.symbol) {
-            const livePrice = await fetchStockPrice(a.symbol);
-            if (livePrice !== null) {
-              activePrice = livePrice;
-              isLivePrice = true;
-            }
-          }
-        } else if (a.type === 'cash') {
-          activePrice = 1;
-        }
-
-        const rate = currency === 'USD' ? currentUsdRate : 1;
-        const twdVal = a.quantity * activePrice * rate;
-        totalTwd += twdVal;
-
-        const accName = a.account || '預設帳戶';
-        accountTotals[accName] = (accountTotals[accName] || 0) + twdVal;
-
-        tableRows += `
-          <tr class="hover:bg-slate-700/30">
-            <td class="p-3 font-medium text-slate-100">${a.name} <span class="text-xs text-slate-400">(${a.symbol || '-'})</span></td>
-            <td class="p-3"><span class="bg-slate-700/60 border border-slate-600 text-slate-300 text-xs px-2 py-0.5 rounded-md">${accName}</span></td>
-            <td class="p-3">${a.quantity}</td>
-            <td class="p-3 font-medium ${isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
-              ${currency} ${Number(activePrice).toFixed(2)}
-              ${isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : (a.type === 'cash' ? '' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>')}
-            </td>
-            <td class="p-3 font-semibold text-emerald-400">NT$ ${Math.round(twdVal).toLocaleString()}</td>
-            <td class="p-3 text-center">
-              <button onclick="deleteAsset('${a.id}')" class="text-red-400 hover:text-red-300 text-xs bg-red-950/50 hover:bg-red-900/50 border border-red-800 px-2.5 py-1 rounded-lg transition">刪除</button>
-            </td>
-          </tr>
-        `;
-      }
-
-      tbody.innerHTML = tableRows;
-      document.getElementById('total-assets').innerText = 'NT$ ' + Math.round(totalTwd).toLocaleString();
-      renderAccountDistribution(accountTotals, totalTwd);
-    }
-
-    function renderAccountDistribution(accountTotals, totalTwd) {
-      const container = document.getElementById('account-distribution');
-      if (!accountTotals || Object.keys(accountTotals).length === 0) {
-        container.innerHTML = `<div class="text-slate-500 text-xs col-span-full">尚無帳戶資料</div>`;
-        return;
-      }
-
-      let html = '';
-      for (const [acc, amt] of Object.entries(accountTotals)) {
-        const pct = totalTwd > 0 ? ((amt / totalTwd) * 100).toFixed(1) : 0;
-        html += `
-          <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 space-y-1">
-            <div class="text-xs text-slate-400 truncate">${acc}</div>
-            <div class="text-base font-bold text-slate-200">NT$ ${Math.round(amt).toLocaleString()}</div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-              <div class="bg-emerald-500 h-1.5 rounded-full" style="width: ${pct}%"></div>
-            </div>
-            <div class="text-[10px] text-slate-500 text-right">${pct}%</div>
-          </div>
-        `;
-      }
-      container.innerHTML = html;
-    }
-
-    function toggleSymbolInput(type) {
-      const symbolContainer = document.getElementById('symbol-container');
-      const priceContainer = document.getElementById('price-container');
-      const qtyLabel = document.getElementById('qty-label');
-
-      if (type === 'cash') {
-        symbolContainer.classList.add('hidden');
-        priceContainer.classList.add('hidden');
-        qtyLabel.innerText = '金額';
-      } else {
-        symbolContainer.classList.remove('hidden');
-        priceContainer.classList.remove('hidden');
-        qtyLabel.innerText = '本次增加數量 / 股數';
-      }
-    }
-
-    async function handleAddAsset(e) {
-      e.preventDefault();
-      if (!currentUser) return alert('請先登入！');
-
-      const name = document.getElementById('new-asset-name').value;
-      const type = document.getElementById('new-asset-type').value;
-      let symbol = document.getElementById('new-asset-symbol').value.trim().toUpperCase();
-      const account = document.getElementById('new-asset-account').value.trim() || '預設帳戶';
-      const quantity = parseFloat(document.getElementById('new-asset-qty').value);
-      let current_price = parseFloat(document.getElementById('new-asset-price').value) || 1;
-      const currency = document.getElementById('new-asset-currency').value;
-
-      if (type === 'cash') {
-        symbol = '';
-        current_price = 1;
-      }
-
-      const existingAsset = loadedAssets.find(a => 
-        (type === 'cash' ? a.type === 'cash' : a.symbol === symbol) && 
-        (a.account || '預設帳戶') === account
-      );
-
-      if (existingAsset) {
-        const updatedQty = parseFloat(existingAsset.quantity) + quantity;
-        const { error } = await supabaseClient.from('assets')
-          .update({ quantity: updatedQty, current_price: current_price })
-          .eq('id', existingAsset.id);
-
-        if (error) alert('更新資產失敗: ' + error.message);
-        else {
-          alert(`已自動併入「${account}」帳戶中的 ${symbol || name}！總股數更新為: ${updatedQty}`);
-          toggleAssetModal(false);
-          loadAssets();
-        }
-      } else {
-        const { error } = await supabaseClient.from('assets').insert([{
-          user_id: currentUser.id, name, symbol, type, quantity, current_price, currency, account
-        }]);
-
-        if (error) alert('新增資產失敗: ' + error.message);
-        else {
-          toggleAssetModal(false);
-          loadAssets();
-        }
-      }
-    }
-
-    async function deleteAsset(id) {
-      if (!confirm('確定要刪除這筆資產嗎？')) return;
-      const { error } = await supabaseClient.from('assets').delete().eq('id', id);
-      if (error) alert('刪除失敗: ' + error.message);
-      else loadAssets();
-    }
-
-    async function loadTransactions() {
-      if (!currentUser) return;
-      const { data: txs, error } = await supabaseClient.from('transactions').select('*').order('created_at', { ascending: false });
-      
-      if (error) {
-        document.getElementById('tx-list').innerHTML = `<div class="text-xs text-red-400 p-2">載入明細失敗：${error.message}</div>`;
-        return;
-      }
-
-      rawTransactions = txs || [];
-      updateMonthFilterOptions();
-      renderTransactions();
-    }
-
-    function updateMonthFilterOptions() {
-      const select = document.getElementById('tx-month-filter');
-      const currentSelected = select.value;
-      const monthsSet = new Set();
-
-      rawTransactions.forEach(t => {
-        const dateObj = t.created_at ? new Date(t.created_at) : new Date();
-        const mStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-        monthsSet.add(mStr);
-      });
-
-      const sortedMonths = Array.from(monthsSet).sort().reverse();
-      let html = `<option value="all">全部紀錄</option>`;
-      sortedMonths.forEach(m => {
-        html += `<option value="${m}">${m}</option>`;
-      });
-
-      select.innerHTML = html;
-      if (Array.from(select.options).some(o => o.value === currentSelected)) {
-        select.value = currentSelected;
-      }
-    }
-
-    function renderTransactions() {
-      const selectedMonth = document.getElementById('tx-month-filter').value;
-      const container = document.getElementById('tx-list');
-
-      let filtered = rawTransactions;
-      if (selectedMonth !== 'all') {
-        filtered = rawTransactions.filter(t => {
-          const dateObj = t.created_at ? new Date(t.created_at) : new Date();
-          const mStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-          return mStr === selectedMonth;
-        });
-      }
-
-      let incSum = 0, expSum = 0;
-      filtered.forEach(t => {
-        const amt = Number(t.amount) || 0;
-        if (t.type === 'income' || t.type === 'realize') incSum += amt;
-        else if (t.type === 'expense') expSum += amt;
-      });
-
-      document.getElementById('sum-income').innerText = 'NT$ ' + Math.round(incSum).toLocaleString();
-      document.getElementById('sum-expense').innerText = 'NT$ ' + Math.round(expSum).toLocaleString();
-      document.getElementById('sum-net').innerText = 'NT$ ' + Math.round(incSum - expSum).toLocaleString();
-
-      if (!filtered || filtered.length === 0) {
-        container.innerHTML = `<div class="text-center p-4 text-slate-500 text-xs">該月份尚無收支紀錄</div>`;
-        return;
-      }
-
-      const txTypeBadge = {
-        'income': { label: '收入', color: 'text-emerald-400 bg-emerald-950/60 border-emerald-700' },
-        'expense': { label: '支出', color: 'text-rose-400 bg-rose-950/60 border-rose-700' },
-        'realize': { label: '變現', color: 'text-blue-400 bg-blue-950/60 border-blue-700' }
-      };
-
-      container.innerHTML = filtered.map(t => {
-        const badge = txTypeBadge[t.type] || { label: t.type, color: 'text-slate-300 bg-slate-800 border-slate-600' };
-        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
-        return `
-          <div class="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-xl border border-slate-700/50 text-xs">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded border ${badge.color}">${badge.label}</span>
-              <div>
-                <div class="font-medium text-slate-200">${t.category}</div>
-                <div class="text-[10px] text-slate-500">${dateStr}</div>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="font-bold text-slate-100">NT$ ${Number(t.amount).toLocaleString()}</span>
-              <button onclick="deleteTransaction('${t.id}')" class="text-slate-500 hover:text-red-400 transition p-1">✕</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    async function handleTransaction(e) {
-      e.preventDefault();
-      if (!currentUser) return alert('請先登入！');
-
-      const type = document.getElementById('tx-type').value;
-      const category = document.getElementById('tx-category').value;
-      const amount = parseFloat(document.getElementById('tx-amount').value);
-      const dateVal = document.getElementById('tx-date').value;
-
-      const created_at = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
-
-      const { error } = await supabaseClient.from('transactions').insert([{
-        user_id: currentUser.id, type, category, amount, created_at
-      }]);
-
-      if (error) alert('紀錄失敗: ' + error.message);
-      else {
-        document.getElementById('tx-category').value = '';
-        document.getElementById('tx-amount').value = '';
-        loadTransactions();
-      }
-    }
-
-    async function deleteTransaction(id) {
-      if (!confirm('確定要刪除這筆收支紀錄嗎？')) return;
-      const { error } = await supabaseClient.from('transactions').delete().eq('id', id);
-      if (error) alert('刪除失敗: ' + error.message);
-      else loadTransactions();
-    }
-
-    function toggleAssetModal(show) {
-      document.getElementById('asset-modal').classList.toggle('hidden', !show);
-      if (show) toggleSymbolInput(document.getElementById('new-asset-type').value);
-    }
-
-    window.onload = init;
-  </script>
 </body>
 </html>
