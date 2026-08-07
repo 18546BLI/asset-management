@@ -29,11 +29,14 @@
         </div>
         <div>
           <label class="block text-slate-400 mb-1">密碼 (Password)</label>
-          <input type="password" id="auth-password" placeholder="請輸入密碼" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+          <input type="password" id="auth-password" placeholder="請輸入密碼" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
         </div>
         <div class="flex gap-3">
           <button type="submit" id="btn-login" onclick="authMode='login'" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl transition">直接登入</button>
           <button type="submit" id="btn-signup" onclick="authMode='signup'" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-2.5 rounded-xl transition">註冊新帳號</button>
+        </div>
+        <div class="text-center pt-2">
+          <button type="button" onclick="handleResetPassword()" class="text-xs text-slate-400 hover:text-emerald-400 underline">忘記密碼？點此發送重設信</button>
         </div>
       </form>
     </div>
@@ -170,11 +173,11 @@
           </select>
         </div>
         <div id="symbol-container">
-          <label class="block text-slate-400 mb-1">股票代碼 (輸入代碼將自動推算名稱與幣別)</label>
+          <label class="block text-slate-400 mb-1">股票代碼 (輸入代碼將自動帶入名稱與幣別)</label>
           <input type="text" id="new-asset-symbol" oninput="handleSymbolInput(this.value)" placeholder="例如：0050 或 VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
         </div>
         <div>
-          <label class="block text-slate-400 mb-1">資產名稱 (系統自動生成，亦可自行修改)</label>
+          <label class="block text-slate-400 mb-1">資產名稱 (系統自動帶入，亦可自行修改)</label>
           <input type="text" id="new-asset-name" placeholder="例如：Vanguard S&P 500 ETF" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
         </div>
         <div>
@@ -209,6 +212,29 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_ix_4ZSypiUVpMxdDzE8Frg___QsGMfO';
 
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 🔑 自動監聽密碼重設 Event
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setTimeout(async () => {
+          const newPassword = prompt('驗證成功！請輸入你的新密碼：');
+          if (newPassword && newPassword.trim() !== '') {
+            const { data, error } = await supabaseClient.auth.updateUser({ 
+              password: newPassword 
+            });
+
+            if (error) {
+              alert('密碼更新失敗：' + error.message);
+            } else {
+              alert('新密碼已成功變更！下次請使用新密碼登入。');
+            }
+          } else {
+            alert('未輸入新密碼，密碼未變更。');
+          }
+        }, 500);
+      }
+    });
+
     let currentUsdRate = 32.21;
     let currentUser = null;
     let authMode = 'login';
@@ -292,6 +318,24 @@
           currentUser = data.user;
           updateUI();
         }
+      }
+    }
+
+    async function handleResetPassword() {
+      const email = document.getElementById('auth-email').value.trim();
+      if (!email) {
+        alert('請先在上方「電子郵件」欄位填入你的 Email，再點擊發送重設信！');
+        return;
+      }
+
+      const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.href,
+      });
+
+      if (error) {
+        alert('發送失敗：' + error.message);
+      } else {
+        alert('重設密碼郵件已發送！請至你的 Email 信箱（含垃圾郵件匣）收信並點擊重設連結。');
       }
     }
 
@@ -435,7 +479,6 @@
         const twdVal = a.quantity * activePrice * rate;
         totalTwd += twdVal;
 
-        // 計算各帳戶分佈
         const accName = a.account || '預設帳戶';
         accountTotals[accName] = (accountTotals[accName] || 0) + twdVal;
 
@@ -461,7 +504,6 @@
       renderAccountDistribution(accountTotals, totalTwd);
     }
 
-    // 渲染各帳戶佔比圖表區塊
     function renderAccountDistribution(accountTotals, totalTwd) {
       const container = document.getElementById('account-distribution');
       if (!accountTotals || Object.keys(accountTotals).length === 0) {
@@ -519,14 +561,12 @@
         current_price = 1;
       }
 
-      // 檢查是否有同代碼 + 同存放帳戶的既有資產（防呆自動合併機制）
       const existingAsset = loadedAssets.find(a => 
         (type === 'cash' ? a.type === 'cash' : a.symbol === symbol) && 
         (a.account || '預設帳戶') === account
       );
 
       if (existingAsset) {
-        // 如果已存在，進行【股數加總更新】
         const updatedQty = parseFloat(existingAsset.quantity) + quantity;
         const { error } = await supabaseClient.from('assets')
           .update({ quantity: updatedQty, current_price: current_price })
@@ -539,7 +579,6 @@
           loadAssets();
         }
       } else {
-        // 不存在則新建一筆
         const { error } = await supabaseClient.from('assets').insert([{
           user_id: currentUser.id, name, symbol, type, quantity, current_price, currency, account
         }]);
@@ -691,4 +730,3 @@
   </script>
 </body>
 </html>
-      
