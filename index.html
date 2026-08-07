@@ -14,7 +14,7 @@
     <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
       <div>
         <h1 class="text-2xl font-bold text-emerald-400">💰 個人資產管理系統</h1>
-        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 台/美/日自動抓價 · 完整匯出與分類檢視</p>
+        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 台美股自動抓價 · 月份收支明細追蹤</p>
       </div>
       <div id="auth-status-header" class="mt-4 md:mt-0"></div>
     </header>
@@ -43,19 +43,15 @@
 
     <!-- 主要內容區塊 (登入後顯示) -->
     <div id="main-app" class="hidden space-y-6">
-      <!-- 總資產與匯率儀表板 (含USD與JPY) -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md">
+      <!-- 總資產與匯率儀表板 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
           <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">總資產估值 (TWD)</span>
-          <div id="total-assets" class="text-3xl font-extrabold text-emerald-400 mt-1">NT$ 0</div>
+          <div id="total-assets" class="text-3xl font-extrabold text-emerald-400 mt-2">NT$ 0</div>
         </div>
-        <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">美元 / 台幣 (USD/TWD)</span>
-          <div id="usd-rate" class="text-2xl font-bold text-blue-400 mt-1">載入中...</div>
-        </div>
-        <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">日幣 / 台幣 (JPY/TWD)</span>
-          <div id="jpy-rate" class="text-2xl font-bold text-amber-400 mt-1">載入中...</div>
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">美元 / 台幣匯率 (即時)</span>
+          <div id="usd-rate" class="text-3xl font-extrabold text-blue-400 mt-2">載入中...</div>
         </div>
       </div>
 
@@ -74,28 +70,25 @@
         <div class="lg:col-span-7 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
           <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-700 pb-4">
             <h2 class="text-xl font-bold text-slate-200">📊 個人資產清單</h2>
-            <div class="flex flex-wrap gap-2">
-              <button onclick="toggleExportModal(true)" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-xl text-xs font-medium transition">📥 匯出資料</button>
+            <div class="flex gap-2">
               <button onclick="loadAssets()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-xl text-xs font-medium transition">🔄 重新抓價</button>
               <button onclick="toggleAssetModal(true)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition">+ 新增資產</button>
             </div>
           </div>
 
-          <!-- 🔍 查詢與分類檢視工具列 -->
-          <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-700/60">
+          <!-- 🔍 查詢與檢視切換工具列 -->
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700/60">
             <!-- 搜尋框 -->
-            <div class="relative flex-1 min-w-[200px]">
-              <input type="text" id="asset-search" oninput="renderAssetView()" placeholder="🔍 搜尋名稱、代碼、帳戶或類別..." class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
+            <div class="relative flex-1 min-w-[180px]">
+              <input type="text" id="asset-search" oninput="renderAssetView()" placeholder="搜尋名稱、代碼或帳戶..." class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
             </div>
-            <!-- 歸類檢視方式 -->
+            <!-- 歸類切換 -->
             <div class="flex items-center gap-2 text-xs">
-              <span class="text-slate-400">檢視方式:</span>
-              <select id="asset-group-mode" onchange="renderAssetView()" class="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-2 focus:outline-none focus:border-emerald-500">
-                <option value="flat">全部 (明細清單)</option>
+              <span class="text-slate-400">歸類方式:</span>
+              <select id="asset-group-mode" onchange="renderAssetView()" class="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-1.5 focus:outline-none focus:border-emerald-500">
+                <option value="flat">明細清單</option>
                 <option value="account">依存放帳戶</option>
-                <option value="type">依庫存類別 (投資/現金)</option>
-                <option value="symbol">依資產標的 (VOO/VT/個股)</option>
-                <option value="currency">依計價幣別 (TWD/USD/JPY)</option>
+                <option value="type">依庫存類別</option>
               </select>
             </div>
           </div>
@@ -108,7 +101,7 @@
                   <th class="p-3">名稱 / 代碼</th>
                   <th class="p-3">存放帳戶</th>
                   <th class="p-3">數量</th>
-                  <th class="p-3">最新價格 / 幣別</th>
+                  <th class="p-3">最新價格</th>
                   <th class="p-3">折算台幣</th>
                   <th class="p-3 text-center">操作</th>
                 </tr>
@@ -120,7 +113,7 @@
           </div>
         </div>
 
-        <!-- 右側：收支登記與月份明細 (占 5 格) -->
+        <!-- 右側：收支登記與月分明細 (占 5 格) -->
         <div class="lg:col-span-5 space-y-6">
           <!-- 快速收支登記表單 -->
           <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
@@ -179,7 +172,7 @@
     </div>
   </div>
 
-  <!-- Modal 1: 新增資產彈窗 -->
+  <!-- Modal: 新增資產彈窗 -->
   <div id="asset-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
@@ -199,18 +192,18 @@
         </div>
         <div id="symbol-container">
           <label class="block text-slate-400 mb-1">股票代碼 (輸入代碼將自動帶入名稱與幣別)</label>
-          <input type="text" id="new-asset-symbol" oninput="handleSymbolInput(this.value)" placeholder="例如：0050, VOO 或 7203 (豐田)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+          <input type="text" id="new-asset-symbol" oninput="handleSymbolInput(this.value)" placeholder="例如：0050 或 VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
         </div>
         <div>
           <label class="block text-slate-400 mb-1">資產名稱 (系統自動帶入，亦可自行修改)</label>
-          <input type="text" id="new-asset-name" placeholder="例如：日幣現金、Vanguard S&P 500 ETF" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+          <input type="text" id="new-asset-name" placeholder="例如：Vanguard S&P 500 ETF" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
         </div>
         <div>
           <label class="block text-slate-400 mb-1">存放帳戶 / 券商</label>
           <select id="new-asset-account-select" onchange="handleAccountSelectChange(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
             <!-- 動態帶入用戶帳戶選單 -->
           </select>
-          <input type="text" id="new-asset-account-custom" placeholder="請輸入新帳戶名稱 (例如：中國信託、富邦證券、日本郵局)" class="hidden w-full bg-slate-900 border border-emerald-500 rounded-xl p-2.5 text-slate-200 mt-2">
+          <input type="text" id="new-asset-account-custom" placeholder="請輸入新帳戶名稱 (例如：中國信託、富邦證券)" class="hidden w-full bg-slate-900 border border-emerald-500 rounded-xl p-2.5 text-slate-200 mt-2">
         </div>
         <div>
           <label id="qty-label" class="block text-slate-400 mb-1">本次增加數量 / 股數</label>
@@ -225,7 +218,6 @@
           <select id="new-asset-currency" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
             <option value="TWD">新台幣 (TWD)</option>
             <option value="USD">美元 (USD)</option>
-            <option value="JPY">日幣 (JPY)</option>
           </select>
         </div>
         <div class="flex gap-2 pt-2">
@@ -233,35 +225,6 @@
           <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl transition">確定儲存</button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- Modal 2: 匯出資料彈窗 -->
-  <div id="export-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
-      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
-        <h3 class="text-lg font-bold text-slate-100">📥 匯出資料 (CSV)</h3>
-        <button onclick="toggleExportModal(false)" class="text-slate-400 hover:text-slate-200">✕</button>
-      </div>
-      <div class="space-y-4 text-sm">
-        <div class="p-4 bg-slate-900/60 rounded-xl border border-slate-700 space-y-2">
-          <h4 class="font-bold text-emerald-400">1. 匯出個人資產資料</h4>
-          <p class="text-xs text-slate-400">包含所有資產名稱、類別、代碼、帳戶、數量、最新價格及折算台幣等資訊。</p>
-          <button onclick="exportAssetsCSV()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-medium transition">匯出資產清單 CSV</button>
-        </div>
-
-        <div class="p-4 bg-slate-900/60 rounded-xl border border-slate-700 space-y-3">
-          <h4 class="font-bold text-blue-400">2. 匯出收支歷史紀錄</h4>
-          <div>
-            <label class="block text-xs text-slate-400 mb-1">選擇範圍：</label>
-            <select id="export-tx-range" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg p-2">
-              <option value="all">全部紀錄</option>
-              <!-- 動態載入年份與月份選項 -->
-            </select>
-          </div>
-          <button onclick="exportTransactionsCSV()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-xs font-medium transition">匯出收支紀錄 CSV</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -294,12 +257,11 @@
     });
 
     let currentUsdRate = 32.21;
-    let currentJpyRate = 0.215;
     let currentUser = null;
     let authMode = 'login';
     let rawTransactions = [];
     let loadedAssets = [];
-    let userAccountsList = ['預設帳戶', '永豐金證券', '國泰世華', '第一證券', '玉山銀行'];
+    let userAccountsList = ['預設帳戶', '永豐金證券', '國泰世華', '第一證券']; // 預設帳戶庫
 
     const knownStockNames = {
       'VOO': 'Vanguard S&P 500 ETF',
@@ -315,9 +277,7 @@
       '00878': '國泰永續高股息',
       '00919': '群益台灣精選高息',
       '00929': '復華台灣科技優息',
-      '2330': '台積電',
-      '7203': '豐田汽車 (Toyota)',
-      '9984': '軟銀集團 (SoftBank)'
+      '2330': '台積電'
     };
 
     const typeMap = {
@@ -406,20 +366,14 @@
       updateUI();
     }
 
-    // 抓取即時美元與日幣匯率
     async function fetchRates() {
       try {
         const res = await fetch('https://open.er-api.com/v6/latest/USD');
         const data = await res.json();
         currentUsdRate = parseFloat(data.rates.TWD.toFixed(2));
-        const usdToJpy = data.rates.JPY;
-        currentJpyRate = parseFloat((data.rates.TWD / usdToJpy).toFixed(4));
-
         document.getElementById('usd-rate').innerText = 'NT$ ' + currentUsdRate;
-        document.getElementById('jpy-rate').innerText = 'NT$ ' + currentJpyRate;
       } catch (e) {
         document.getElementById('usd-rate').innerText = 'NT$ 32.21 (預設)';
-        document.getElementById('jpy-rate').innerText = 'NT$ 0.215 (預設)';
       }
     }
 
@@ -434,9 +388,7 @@
         nameInput.value = clean;
       }
 
-      if (clean.endsWith('.T') || clean.endsWith('.JP')) {
-        currSelect.value = 'JPY';
-      } else if (/^[A-Z]+$/.test(clean)) {
+      if (/^[A-Z]+$/.test(clean)) {
         currSelect.value = 'USD';
       } else if (/^\d+$/.test(clean)) {
         currSelect.value = 'TWD';
@@ -446,27 +398,9 @@
     async function fetchStockPrice(symbol) {
       if (!symbol) return null;
       let cleanSymbol = symbol.trim().toUpperCase().replace('.TW', '');
+      const isTaiwanStock = /^\d+$/.test(cleanSymbol);
 
-      // 日股判斷 (例如 7203.T)
-      if (cleanSymbol.endsWith('.T') || cleanSymbol.endsWith('.JP')) {
-        try {
-          const ticker = cleanSymbol.split('.')[0] + '.JP';
-          const stooqUrl = `https://stooq.com/q/l/?s=${ticker}&f=sd2t2ohlcv&h&e=csv`;
-          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(stooqUrl)}`);
-          const csvText = await res.text();
-          const lines = csvText.trim().split('\n');
-          if (lines.length > 1) {
-            const cols = lines[1].split(',');
-            const closePrice = parseFloat(cols[6]);
-            if (!isNaN(closePrice) && closePrice > 0) return closePrice;
-          }
-        } catch (e) {
-          console.warn('日股 Stooq 抓價失敗');
-        }
-      }
-
-      // 台股判斷
-      if (/^\d+$/.test(cleanSymbol)) {
+      if (isTaiwanStock) {
         try {
           const finmindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${cleanSymbol}&start_date=${getRecentDateStr()}`;
           const res = await fetch(finmindUrl);
@@ -478,7 +412,6 @@
           console.warn('FinMind 台股抓價失敗:', e);
         }
       } else {
-        // 美股判斷
         try {
           const stooqUrl = `https://stooq.com/q/l/?s=${cleanSymbol}.us&f=sd2t2ohlcv&h&e=csv`;
           const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(stooqUrl)}`);
@@ -487,7 +420,9 @@
           if (lines.length > 1) {
             const cols = lines[1].split(',');
             const closePrice = parseFloat(cols[6]);
-            if (!isNaN(closePrice) && closePrice > 0) return closePrice;
+            if (!isNaN(closePrice) && closePrice > 0) {
+              return closePrice;
+            }
           }
         } catch (e) {
           console.warn('Stooq 美股抓價失敗，嘗試 Yahoo 備援...');
@@ -500,7 +435,7 @@
           const price = data.chart.result[0].meta.regularMarketPrice;
           if (price) return price;
         } catch (e) {
-          console.error(`股票 ${cleanSymbol} 抓價失敗`);
+          console.error(`美股 ${cleanSymbol} 抓價失敗`);
         }
       }
 
@@ -520,7 +455,7 @@
 
       loadedAssets = assets || [];
 
-      // 動態彙整使用者建立過的所有帳戶名稱
+      // 自動從用戶現有資產收集所有自訂過的帳戶名稱
       loadedAssets.forEach(a => {
         const acc = a.account || '預設帳戶';
         if (!userAccountsList.includes(acc)) {
@@ -543,12 +478,19 @@
           正在獲取最新即時價格...
         </div>`;
 
-      // 抓價與匯率換算
+      // 抓價與運算
       for (let a of loadedAssets) {
         let activePrice = a.current_price || 1;
         let isLivePrice = false;
 
-        let currency = a.currency || 'TWD';
+        let currency = a.currency;
+        if (!currency || currency === 'TWD') {
+          if (a.symbol && /^[A-Za-z]+$/.test(a.symbol.trim())) {
+            currency = 'USD';
+          } else {
+            currency = 'TWD';
+          }
+        }
 
         if (a.type === 'stock' || a.type === 'fund') {
           if (a.symbol) {
@@ -559,14 +501,10 @@
             }
           }
         } else if (a.type === 'cash') {
-          activePrice = 1; // 現金單價固定為 1 (金額即為數量)
+          activePrice = 1;
         }
 
-        // 🔧 關鍵修正：不論是股票還是現金，皆依據其設定的幣別（TWD, USD, JPY）進行台幣折算
-        let rate = 1;
-        if (currency === 'USD') rate = currentUsdRate;
-        else if (currency === 'JPY') rate = currentJpyRate;
-
+        const rate = currency === 'USD' ? currentUsdRate : 1;
         a._activePrice = activePrice;
         a._isLivePrice = isLivePrice;
         a._currency = currency;
@@ -595,15 +533,12 @@
       const groupMode = document.getElementById('asset-group-mode').value;
       const container = document.getElementById('asset-display-container');
 
-      // 🔍 搜尋過濾：包含名稱、代碼、帳戶、庫存類別
+      // 關鍵字過濾
       let filtered = loadedAssets.filter(a => {
         const nameMatch = (a.name || '').toLowerCase().includes(searchKeyword);
         const symbolMatch = (a.symbol || '').toLowerCase().includes(searchKeyword);
         const accountMatch = (a.account || '預設帳戶').toLowerCase().includes(searchKeyword);
-        const typeMatch = (typeMap[a.type] || '').toLowerCase().includes(searchKeyword);
-        const currencyMatch = (a._currency || '').toLowerCase().includes(searchKeyword);
-
-        return nameMatch || symbolMatch || accountMatch || typeMatch || currencyMatch;
+        return nameMatch || symbolMatch || accountMatch;
       });
 
       if (filtered.length === 0) {
@@ -612,6 +547,7 @@
       }
 
       if (groupMode === 'flat') {
+        // 明細清單
         let rows = filtered.map(a => renderAssetRow(a)).join('');
         container.innerHTML = `
           <table class="w-full text-left text-sm text-slate-300">
@@ -620,7 +556,7 @@
                 <th class="p-3">名稱 / 代碼</th>
                 <th class="p-3">存放帳戶</th>
                 <th class="p-3">數量</th>
-                <th class="p-3">最新價格 / 幣別</th>
+                <th class="p-3">最新價格</th>
                 <th class="p-3">折算台幣</th>
                 <th class="p-3 text-center">操作</th>
               </tr>
@@ -629,15 +565,10 @@
           </table>
         `;
       } else {
-        // 多維度分類歸類檢視
+        // 分組檢視（依帳戶 或 依類別）
         let groups = {};
         filtered.forEach(a => {
-          let key = '其他';
-          if (groupMode === 'account') key = a.account || '預設帳戶';
-          else if (groupMode === 'type') key = typeMap[a.type] || '其他';
-          else if (groupMode === 'currency') key = `${a._currency || 'TWD'} 計價資產`;
-          else if (groupMode === 'symbol') key = a.symbol ? `${a.symbol} (${a.name})` : a.name;
-
+          let key = groupMode === 'account' ? (a.account || '預設帳戶') : (typeMap[a.type] || '其他');
           if (!groups[key]) groups[key] = [];
           groups[key].push(a);
         });
@@ -670,10 +601,10 @@
         <tr class="hover:bg-slate-700/30">
           <td class="p-3 font-medium text-slate-100">${a.name} <span class="text-xs text-slate-400">(${a.symbol || '-'})</span></td>
           <td class="p-3"><span class="bg-slate-700/60 border border-slate-600 text-slate-300 text-xs px-2 py-0.5 rounded-md">${accName}</span></td>
-          <td class="p-3">${Number(a.quantity).toLocaleString()}</td>
+          <td class="p-3">${a.quantity}</td>
           <td class="p-3 font-medium ${a._isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
             ${a._currency} ${Number(a._activePrice).toFixed(2)}
-            ${a._isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : (a.type === 'cash' ? '<span class="text-[10px] text-slate-400 ml-1">(現金)</span>' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>')}
+            ${a._isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : (a.type === 'cash' ? '' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>')}
           </td>
           <td class="p-3 font-semibold text-emerald-400">NT$ ${Math.round(a._twdVal).toLocaleString()}</td>
           <td class="p-3 text-center">
@@ -733,7 +664,7 @@
       if (type === 'cash') {
         symbolContainer.classList.add('hidden');
         priceContainer.classList.add('hidden');
-        qtyLabel.innerText = '金額 / 數量';
+        qtyLabel.innerText = '金額';
       } else {
         symbolContainer.classList.remove('hidden');
         priceContainer.classList.remove('hidden');
@@ -768,9 +699,8 @@
         current_price = 1;
       }
 
-      // 🔧 關鍵修復：現金判定併入時，必須同時比對「名稱」與「幣別」，避免外幣現金與台幣現金合併
       const existingAsset = loadedAssets.find(a => 
-        (type === 'cash' ? (a.type === 'cash' && a.currency === currency && a.name === name) : a.symbol === symbol) && 
+        (type === 'cash' ? a.type === 'cash' : a.symbol === symbol) && 
         (a.account || '預設帳戶') === account
       );
 
@@ -782,7 +712,7 @@
 
         if (error) alert('更新資產失敗: ' + error.message);
         else {
-          alert(`已自動併入「${account}」帳戶中的 ${symbol || name}！總金額/股數更新為: ${updatedQty}`);
+          alert(`已自動併入「${account}」帳戶中的 ${symbol || name}！總股數更新為: ${updatedQty}`);
           toggleAssetModal(false);
           loadAssets();
         }
@@ -822,41 +752,25 @@
 
     function updateMonthFilterOptions() {
       const select = document.getElementById('tx-month-filter');
-      const exportRangeSelect = document.getElementById('export-tx-range');
-
       const currentSelected = select.value;
       const monthsSet = new Set();
-      const yearsSet = new Set();
 
       rawTransactions.forEach(t => {
         const dateObj = t.created_at ? new Date(t.created_at) : new Date();
-        const yStr = `${dateObj.getFullYear()}年`;
         const mStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
         monthsSet.add(mStr);
-        yearsSet.add(yStr);
       });
 
       const sortedMonths = Array.from(monthsSet).sort().reverse();
-      const sortedYears = Array.from(yearsSet).sort().reverse();
-
-      // 月份選單
       let html = `<option value="all">全部紀錄</option>`;
       sortedMonths.forEach(m => {
         html += `<option value="${m}">${m}</option>`;
       });
+
       select.innerHTML = html;
       if (Array.from(select.options).some(o => o.value === currentSelected)) {
         select.value = currentSelected;
       }
-
-      // 匯出範圍選單 (包含年份與月份)
-      let exportHtml = `<option value="all">全部歷史紀錄</option>`;
-      exportHtml += `<optgroup label="依年份匯出">`;
-      sortedYears.forEach(y => exportHtml += `<option value="Y:${y.replace('年','')}">${y} 全年紀錄</option>`);
-      exportHtml += `</optgroup><optgroup label="依月份匯出">`;
-      sortedMonths.forEach(m => exportHtml += `<option value="M:${m}">${m} 月份紀錄</option>`);
-      exportHtml += `</optgroup>`;
-      exportRangeSelect.innerHTML = exportHtml;
     }
 
     function renderTransactions() {
@@ -945,80 +859,12 @@
       else loadTransactions();
     }
 
-    // -------------------------------------------------------------
-    // 📥 CSV 資料匯出邏輯 (包含 BOM 避開亂碼)
-    // -------------------------------------------------------------
-    function downloadCSV(csvContent, fileName) {
-      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", fileName);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-
-    function exportAssetsCSV() {
-      if (!loadedAssets || loadedAssets.length === 0) {
-        return alert('目前沒有資產資料可供匯出');
-      }
-
-      let csv = "資產名稱,股票代碼,類別,存放帳戶,數量,計價幣別,最新單價,折算台幣估值\n";
-      loadedAssets.forEach(a => {
-        const typeLabel = typeMap[a.type] || a.type;
-        const acc = a.account || '預設帳戶';
-        csv += `"${a.name}","${a.symbol || ''}","${typeLabel}","${acc}",${a.quantity},"${a._currency}",${a._activePrice},${Math.round(a._twdVal)}\n`;
-      });
-
-      const dateStr = new Date().toISOString().split('T')[0];
-      downloadCSV(csv, `個人資產清單_${dateStr}.csv`);
-    }
-
-    function exportTransactionsCSV() {
-      if (!rawTransactions || rawTransactions.length === 0) {
-        return alert('目前沒有收支紀錄可供匯出');
-      }
-
-      const rangeVal = document.getElementById('export-tx-range').value;
-      let filtered = rawTransactions;
-
-      if (rangeVal.startsWith('Y:')) {
-        const year = rangeVal.replace('Y:', '');
-        filtered = rawTransactions.filter(t => new Date(t.created_at).getFullYear().toString() === year);
-      } else if (rangeVal.startsWith('M:')) {
-        const month = rangeVal.replace('M:', '');
-        filtered = rawTransactions.filter(t => {
-          const d = new Date(t.created_at);
-          const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          return mStr === month;
-        });
-      }
-
-      if (filtered.length === 0) {
-        return alert('選取範圍內無收支紀錄');
-      }
-
-      const typeNameMap = { 'income': '收入', 'expense': '支出', 'realize': '資產變現' };
-      let csv = "日期,類型,說明/分類,金額(TWD)\n";
-      filtered.forEach(t => {
-        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
-        csv += `"${dateStr}","${typeNameMap[t.type] || t.type}","${t.category}",${t.amount}\n`;
-      });
-
-      downloadCSV(csv, `收支紀錄_${rangeVal.replace(':', '_')}.csv`);
-    }
-
     function toggleAssetModal(show) {
       document.getElementById('asset-modal').classList.toggle('hidden', !show);
       if (show) {
         populateAccountOptions();
         toggleSymbolInput(document.getElementById('new-asset-type').value);
       }
-    }
-
-    function toggleExportModal(show) {
-      document.getElementById('export-modal').classList.toggle('hidden', !show);
     }
 
     window.onload = init;
