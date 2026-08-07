@@ -14,7 +14,7 @@
     <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
       <div>
         <h1 class="text-2xl font-bold text-emerald-400">💰 個人資產管理系統</h1>
-        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 自動即時抓價 · 月份收支明細追蹤</p>
+        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 免金鑰自動抓價 · 月份收支明細追蹤</p>
       </div>
       <div id="auth-status-header" class="mt-4 md:mt-0"></div>
     </header>
@@ -151,30 +151,29 @@
       <form onsubmit="handleAddAsset(event)" class="space-y-3 text-sm">
         <div>
           <label class="block text-slate-400 mb-1">資產名稱</label>
-          <input type="text" id="new-asset-name" placeholder="例如：元大台灣50、VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
-        </div>
-        <div>
-          <label class="block text-slate-400 mb-1">代碼 (Yahoo 代碼)</label>
-          <input type="text" id="new-asset-symbol" placeholder="台股填 0050.TW，美股填 VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-          <p class="text-xs text-slate-400 mt-1">※ 台股/ETF 請輸入代碼如 `0050` 或 `0050.TW`；美股直接填代碼如 `VOO`。</p>
+          <input type="text" id="new-asset-name" placeholder="例如：台幣活存、元大台灣50" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
         </div>
         <div>
           <label class="block text-slate-400 mb-1">資產類別</label>
-          <select id="new-asset-type" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-            <option value="stock">股票 / ETF</option>
-            <option value="fund">基金 / 連結基金</option>
-            <option value="cash">現金 / 存款</option>
-            <option value="gold">黃金 / 貴金屬</option>
-            <option value="other">其他</option>
+          <select id="new-asset-type" onchange="toggleSymbolInput(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+            <option value="cash">💵 現金 / 存款</option>
+            <option value="stock">📈 股票 / ETF</option>
+            <option value="fund">🏦 基金 / 連結基金</option>
+            <option value="gold">🏆 黃金 / 貴金屬</option>
+            <option value="other">📦 其他</option>
           </select>
         </div>
-        <div>
-          <label class="block text-slate-400 mb-1">持有數量 / 股數</label>
-          <input type="number" id="new-asset-qty" step="any" placeholder="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+        <div id="symbol-container" class="hidden">
+          <label class="block text-slate-400 mb-1">股票代碼 (台股填數字如 0050，美股填 VOO)</label>
+          <input type="text" id="new-asset-symbol" placeholder="例如：0050" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
         </div>
         <div>
-          <label class="block text-slate-400 mb-1">預設/備用單價 (抓不到價格時使用)</label>
-          <input type="number" id="new-asset-price" step="any" placeholder="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+          <label id="qty-label" class="block text-slate-400 mb-1">金額 / 數量</label>
+          <input type="number" id="new-asset-qty" step="any" placeholder="現金填金額，股票填股數" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+        </div>
+        <div id="price-container" class="hidden">
+          <label class="block text-slate-400 mb-1">預設/備用單價</label>
+          <input type="number" id="new-asset-price" step="any" value="1" placeholder="1" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
         </div>
         <div>
           <label class="block text-slate-400 mb-1">計價幣別</label>
@@ -199,7 +198,7 @@
     let currentUsdRate = 32.26;
     let currentUser = null;
     let authMode = 'login';
-    let rawTransactions = []; // 快存收支紀錄
+    let rawTransactions = [];
 
     const typeMap = {
       'stock': '股票/ETF',
@@ -210,7 +209,6 @@
     };
 
     async function init() {
-      // 預設日期為今天
       document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
       await fetchRates();
       const { data: { user } } = await supabaseClient.auth.getUser();
@@ -281,38 +279,42 @@
       }
     }
 
-    // 強化版跨網域 (CORS) 抓價邏輯，帶有雙重代理備用
-    async function fetchYahooPrice(symbol) {
+    // 穩健抓價邏輯 (FinMind API 優先針對台股)
+    async function fetchStockPrice(symbol) {
       if (!symbol) return null;
-      let cleanSymbol = symbol.trim().toUpperCase();
-      if (/^\d{4,6}$/.test(cleanSymbol)) {
-        cleanSymbol += '.TW';
+      let cleanSymbol = symbol.trim().toUpperCase().replace('.TW', '');
+
+      // 1. 先用 FinMind API 抓台股 (免 CORS 擋、免 Key、極穩定)
+      try {
+        const finmindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${cleanSymbol}&start_date=${getRecentDateStr()}`;
+        const res = await fetch(finmindUrl);
+        const data = await res.json();
+        if (data && data.data && data.data.length > 0) {
+          const latest = data.data[data.data.length - 1];
+          return latest.close;
+        }
+      } catch (e) {
+        console.warn('FinMind 抓價失敗，嘗試次要來源...');
       }
 
-      const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}?interval=1d`;
-      
-      // 代理 1: corsproxy.io
+      // 2. 備用代理 抓取 Yahoo / Stooq
       try {
+        const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}.TW?interval=1d`;
         const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
         const data = await res.json();
         const price = data.chart.result[0].meta.regularMarketPrice;
         if (price) return price;
       } catch (e) {
-        console.warn('Proxy 1 failed, trying Backup Proxy...');
-      }
-
-      // 代理 2: allorigins
-      try {
-        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`);
-        const proxyData = await res.json();
-        const data = JSON.parse(proxyData.contents);
-        const price = data.chart.result[0].meta.regularMarketPrice;
-        if (price) return price;
-      } catch (e) {
-        console.error(`無法抓取 ${cleanSymbol} 價格:`, e);
+        console.error(`無法抓取代碼 ${cleanSymbol} 價格`);
       }
 
       return null;
+    }
+
+    function getRecentDateStr() {
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      return d.toISOString().split('T')[0];
     }
 
     async function loadAssets() {
@@ -333,15 +335,20 @@
       let tableRows = '';
 
       for (const a of assets) {
-        let activePrice = a.current_price;
+        let activePrice = a.current_price || 1;
         let isLivePrice = false;
 
-        if (a.symbol && (a.type === 'stock' || a.type === 'fund')) {
-          const livePrice = await fetchYahooPrice(a.symbol);
-          if (livePrice !== null) {
-            activePrice = livePrice;
-            isLivePrice = true;
+        // 只有股票/基金類別才去抓價，現金類別跳過
+        if (a.type === 'stock' || a.type === 'fund') {
+          if (a.symbol) {
+            const livePrice = await fetchStockPrice(a.symbol);
+            if (livePrice !== null) {
+              activePrice = livePrice;
+              isLivePrice = true;
+            }
           }
+        } else if (a.type === 'cash') {
+          activePrice = 1; // 現金單價永遠為 1
         }
 
         const rate = a.currency === 'USD' ? currentUsdRate : 1;
@@ -356,7 +363,7 @@
             <td class="p-3">${a.quantity}</td>
             <td class="p-3 font-medium ${isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
               ${a.currency} ${Number(activePrice).toFixed(2)}
-              ${isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>'}
+              ${isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : (a.type === 'cash' ? '' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>')}
             </td>
             <td class="p-3 font-semibold text-emerald-400">NT$ ${Math.round(twdVal).toLocaleString()}</td>
             <td class="p-3 text-center">
@@ -368,6 +375,56 @@
 
       tbody.innerHTML = tableRows;
       document.getElementById('total-assets').innerText = 'NT$ ' + Math.round(totalTwd).toLocaleString();
+    }
+
+    function toggleSymbolInput(type) {
+      const symbolContainer = document.getElementById('symbol-container');
+      const priceContainer = document.getElementById('price-container');
+      const qtyLabel = document.getElementById('qty-label');
+
+      if (type === 'cash') {
+        symbolContainer.classList.add('hidden');
+        priceContainer.classList.add('hidden');
+        qtyLabel.innerText = '金額';
+      } else {
+        symbolContainer.classList.remove('hidden');
+        priceContainer.classList.remove('hidden');
+        qtyLabel.innerText = '持有數量 / 股數';
+      }
+    }
+
+    async function handleAddAsset(e) {
+      e.preventDefault();
+      if (!currentUser) return alert('請先登入！');
+
+      const name = document.getElementById('new-asset-name').value;
+      const type = document.getElementById('new-asset-type').value;
+      let symbol = document.getElementById('new-asset-symbol').value.trim();
+      const quantity = parseFloat(document.getElementById('new-asset-qty').value);
+      let current_price = parseFloat(document.getElementById('new-asset-price').value) || 1;
+      const currency = document.getElementById('new-asset-currency').value;
+
+      if (type === 'cash') {
+        symbol = '';
+        current_price = 1;
+      }
+
+      const { error } = await supabaseClient.from('assets').insert([{
+        user_id: currentUser.id, name, symbol, type, quantity, current_price, currency
+      }]);
+
+      if (error) alert('新增資產失敗: ' + error.message);
+      else {
+        toggleAssetModal(false);
+        loadAssets();
+      }
+    }
+
+    async function deleteAsset(id) {
+      if (!confirm('確定要刪除這筆資產嗎？')) return;
+      const { error } = await supabaseClient.from('assets').delete().eq('id', id);
+      if (error) alert('刪除失敗: ' + error.message);
+      else loadAssets();
     }
 
     async function loadTransactions() {
@@ -384,7 +441,6 @@
       renderTransactions();
     }
 
-    // 更新「月份選單」選項
     function updateMonthFilterOptions() {
       const select = document.getElementById('tx-month-filter');
       const currentSelected = select.value;
@@ -408,7 +464,6 @@
       }
     }
 
-    // 渲染收支明細與當月統計
     function renderTransactions() {
       const selectedMonth = document.getElementById('tx-month-filter').value;
       const container = document.getElementById('tx-list');
@@ -422,13 +477,11 @@
         });
       }
 
-      // 統計月度金額
       let incSum = 0, expSum = 0;
       filtered.forEach(t => {
         const amt = Number(t.amount) || 0;
-        if (t.type === 'income') incSum += amt;
+        if (t.type === 'income' || t.type === 'realize') incSum += amt;
         else if (t.type === 'expense') expSum += amt;
-        else if (t.type === 'realize') incSum += amt; // 變現預設算入現金流入
       });
 
       document.getElementById('sum-income').innerText = 'NT$ ' + Math.round(incSum).toLocaleString();
@@ -467,39 +520,6 @@
       }).join('');
     }
 
-    async function handleAddAsset(e) {
-      e.preventDefault();
-      if (!currentUser) return alert('請先登入！');
-
-      let name = document.getElementById('new-asset-name').value;
-      let symbol = document.getElementById('new-asset-symbol').value.trim();
-      const type = document.getElementById('new-asset-type').value;
-      const quantity = parseFloat(document.getElementById('new-asset-qty').value);
-      const current_price = parseFloat(document.getElementById('new-asset-price').value);
-      const currency = document.getElementById('new-asset-currency').value;
-
-      if (symbol && /^\d{4,6}$/.test(symbol)) {
-        symbol += '.TW';
-      }
-
-      const { error } = await supabaseClient.from('assets').insert([{
-        user_id: currentUser.id, name, symbol, type, quantity, current_price, currency
-      }]);
-
-      if (error) alert('新增資產失敗: ' + error.message);
-      else {
-        toggleAssetModal(false);
-        loadAssets();
-      }
-    }
-
-    async function deleteAsset(id) {
-      if (!confirm('確定要刪除這筆資產嗎？')) return;
-      const { error } = await supabaseClient.from('assets').delete().eq('id', id);
-      if (error) alert('刪除失敗: ' + error.message);
-      else loadAssets();
-    }
-
     async function handleTransaction(e) {
       e.preventDefault();
       if (!currentUser) return alert('請先登入！');
@@ -515,7 +535,7 @@
         user_id: currentUser.id, type, category, amount, created_at
       }]);
 
-      if (error) alert('紀錄失敗: ' + error.message + '\n（請確保 Supabase 的 transactions 資料表已建立且開啟權限）');
+      if (error) alert('紀錄失敗: ' + error.message);
       else {
         document.getElementById('tx-category').value = '';
         document.getElementById('tx-amount').value = '';
@@ -532,6 +552,7 @@
 
     function toggleAssetModal(show) {
       document.getElementById('asset-modal').classList.toggle('hidden', !show);
+      if (show) toggleSymbolInput(document.getElementById('new-asset-type').value);
     }
 
     window.onload = init;
