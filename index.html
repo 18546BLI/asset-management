@@ -52,6 +52,16 @@
         </div>
       </div>
 
+      <!-- 各帳戶資產分佈統計 -->
+      <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+        <h2 class="text-lg font-bold text-slate-200 mb-3 flex items-center gap-2">
+          🏦 各帳戶資產分佈概況
+        </h2>
+        <div id="account-distribution" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          <div class="text-slate-500 text-xs col-span-full">計算帳戶資料中...</div>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <!-- 左側：Asset List (占 7 格) -->
         <div class="lg:col-span-7 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
@@ -68,7 +78,7 @@
               <thead class="text-xs uppercase bg-slate-700/50 text-slate-400">
                 <tr>
                   <th class="p-3">名稱 / 代碼</th>
-                  <th class="p-3">類別</th>
+                  <th class="p-3">存放帳戶</th>
                   <th class="p-3">數量</th>
                   <th class="p-3">最新價格</th>
                   <th class="p-3">折算台幣</th>
@@ -145,31 +155,35 @@
   <div id="asset-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
-        <h3 class="text-lg font-bold text-slate-100">➕ 新增資產項目</h3>
+        <h3 class="text-lg font-bold text-slate-100">➕ 新增 / 併入資產項目</h3>
         <button onclick="toggleAssetModal(false)" class="text-slate-400 hover:text-slate-200">✕</button>
       </div>
       <form onsubmit="handleAddAsset(event)" class="space-y-3 text-sm">
         <div>
-          <label class="block text-slate-400 mb-1">資產名稱</label>
-          <input type="text" id="new-asset-name" placeholder="例如：元大台灣50、美股 VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
-        </div>
-        <div>
           <label class="block text-slate-400 mb-1">資產類別</label>
           <select id="new-asset-type" onchange="toggleSymbolInput(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
-            <option value="cash">💵 現金 / 存款</option>
             <option value="stock" selected>📈 股票 / ETF</option>
+            <option value="cash">💵 現金 / 存款</option>
             <option value="fund">🏦 基金 / 連結基金</option>
             <option value="gold">🏆 黃金 / 貴金屬</option>
             <option value="other">📦 其他</option>
           </select>
         </div>
         <div id="symbol-container">
-          <label class="block text-slate-400 mb-1">股票代碼 (台股填數字如 0050，美股填 VOO)</label>
-          <input type="text" id="new-asset-symbol" oninput="autoDetectCurrency(this.value)" placeholder="例如：0050 或 VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+          <label class="block text-slate-400 mb-1">股票代碼 (輸入代碼將自動推算名稱與幣別)</label>
+          <input type="text" id="new-asset-symbol" oninput="handleSymbolInput(this.value)" placeholder="例如：0050 或 VOO" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
         </div>
         <div>
-          <label id="qty-label" class="block text-slate-400 mb-1">持有數量 / 股數</label>
-          <input type="number" id="new-asset-qty" step="any" placeholder="現金填金額，股票填股數" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+          <label class="block text-slate-400 mb-1">資產名稱 (系統自動生成，亦可自行修改)</label>
+          <input type="text" id="new-asset-name" placeholder="例如：Vanguard S&P 500 ETF" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">存放帳戶 / 券商備註</label>
+          <input type="text" id="new-asset-account" placeholder="例如：永豐金證券、國泰世華、第一證券" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" value="預設帳戶" required>
+        </div>
+        <div>
+          <label id="qty-label" class="block text-slate-400 mb-1">本次增加數量 / 股數</label>
+          <input type="number" id="new-asset-qty" step="any" placeholder="若同帳戶已存在，將自動加總" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
         </div>
         <div id="price-container">
           <label class="block text-slate-400 mb-1">預設/備用單價</label>
@@ -184,7 +198,7 @@
         </div>
         <div class="flex gap-2 pt-2">
           <button type="button" onclick="toggleAssetModal(false)" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-slate-300 py-2.5 rounded-xl transition">取消</button>
-          <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl transition">確定新增</button>
+          <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl transition">確定儲存</button>
         </div>
       </form>
     </div>
@@ -199,6 +213,25 @@
     let currentUser = null;
     let authMode = 'login';
     let rawTransactions = [];
+    let loadedAssets = [];
+
+    // 常用股票代碼與預設名稱映射庫
+    const knownStockNames = {
+      'VOO': 'Vanguard S&P 500 ETF',
+      'QQQ': 'Invesco QQQ Trust',
+      'SPY': 'SPDR S&P 500 ETF Trust',
+      'VT': 'Vanguard Total World Stock ETF',
+      'AAPL': 'Apple Inc.',
+      'NVDA': 'NVIDIA Corporation',
+      'TSLA': 'Tesla, Inc.',
+      'MSFT': 'Microsoft Corporation',
+      '0050': '元大台灣50',
+      '0056': '元大高股息',
+      '00878': '國泰永續高股息',
+      '00919': '群益台灣精選高息',
+      '00929': '復華台灣科技優息',
+      '2330': '台積電'
+    };
 
     const typeMap = {
       'stock': '股票/ETF',
@@ -279,10 +312,18 @@
       }
     }
 
-    // 依據代碼英數自動切換幣別
-    function autoDetectCurrency(symbol) {
+    // 代碼輸入輔助：自動填寫名稱與判斷幣別
+    function handleSymbolInput(symbol) {
       const clean = symbol.trim().toUpperCase();
+      const nameInput = document.getElementById('new-asset-name');
       const currSelect = document.getElementById('new-asset-currency');
+
+      if (knownStockNames[clean]) {
+        nameInput.value = knownStockNames[clean];
+      } else if (clean.length > 0) {
+        nameInput.value = clean;
+      }
+
       if (/^[A-Z]+$/.test(clean)) {
         currSelect.value = 'USD';
       } else if (/^\d+$/.test(clean)) {
@@ -290,16 +331,13 @@
       }
     }
 
-    // 智能美股/台股分流抓價邏輯
+    // 智能美股/台股抓價邏輯
     async function fetchStockPrice(symbol) {
       if (!symbol) return null;
       let cleanSymbol = symbol.trim().toUpperCase().replace('.TW', '');
-
-      // 判斷是否為台股 (純數字)
       const isTaiwanStock = /^\d+$/.test(cleanSymbol);
 
       if (isTaiwanStock) {
-        // 1. 台股用 FinMind API
         try {
           const finmindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${cleanSymbol}&start_date=${getRecentDateStr()}`;
           const res = await fetch(finmindUrl);
@@ -311,7 +349,6 @@
           console.warn('FinMind 台股抓價失敗:', e);
         }
       } else {
-        // 2. 美股優先用 Stooq API
         try {
           const stooqUrl = `https://stooq.com/q/l/?s=${cleanSymbol}.us&f=sd2t2ohlcv&h&e=csv`;
           const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(stooqUrl)}`);
@@ -328,7 +365,6 @@
           console.warn('Stooq 美股抓價失敗，嘗試 Yahoo 備援...');
         }
 
-        // 3. 美股備援：Yahoo Finance (不補 .TW)
         try {
           const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}?interval=1d`;
           const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
@@ -354,10 +390,13 @@
       const { data: assets, error } = await supabaseClient.from('assets').select('*');
       if (error) return console.error('Fetch error:', error);
 
+      loadedAssets = assets || [];
       const tbody = document.getElementById('asset-table-body');
-      if (!assets || assets.length === 0) {
+      
+      if (!loadedAssets || loadedAssets.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" class="text-center p-6 text-slate-500">目前尚無資產資料，點擊右上角「+ 新增資產」開始建立</td></tr>`;
         document.getElementById('total-assets').innerText = 'NT$ 0';
+        renderAccountDistribution({});
         return;
       }
 
@@ -365,12 +404,12 @@
 
       let totalTwd = 0;
       let tableRows = '';
+      let accountTotals = {};
 
-      for (const a of assets) {
+      for (const a of loadedAssets) {
         let activePrice = a.current_price || 1;
         let isLivePrice = false;
 
-        // 自動推算幣別：如果英文代碼且資料庫未存幣別，自動補 USD
         let currency = a.currency;
         if (!currency || currency === 'TWD') {
           if (a.symbol && /^[A-Za-z]+$/.test(a.symbol.trim())) {
@@ -395,12 +434,15 @@
         const rate = currency === 'USD' ? currentUsdRate : 1;
         const twdVal = a.quantity * activePrice * rate;
         totalTwd += twdVal;
-        const displayType = typeMap[a.type] || a.type;
+
+        // 計算各帳戶分佈
+        const accName = a.account || '預設帳戶';
+        accountTotals[accName] = (accountTotals[accName] || 0) + twdVal;
 
         tableRows += `
           <tr class="hover:bg-slate-700/30">
             <td class="p-3 font-medium text-slate-100">${a.name} <span class="text-xs text-slate-400">(${a.symbol || '-'})</span></td>
-            <td class="p-3 text-slate-400">${displayType}</td>
+            <td class="p-3"><span class="bg-slate-700/60 border border-slate-600 text-slate-300 text-xs px-2 py-0.5 rounded-md">${accName}</span></td>
             <td class="p-3">${a.quantity}</td>
             <td class="p-3 font-medium ${isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
               ${currency} ${Number(activePrice).toFixed(2)}
@@ -416,6 +458,32 @@
 
       tbody.innerHTML = tableRows;
       document.getElementById('total-assets').innerText = 'NT$ ' + Math.round(totalTwd).toLocaleString();
+      renderAccountDistribution(accountTotals, totalTwd);
+    }
+
+    // 渲染各帳戶佔比圖表區塊
+    function renderAccountDistribution(accountTotals, totalTwd) {
+      const container = document.getElementById('account-distribution');
+      if (!accountTotals || Object.keys(accountTotals).length === 0) {
+        container.innerHTML = `<div class="text-slate-500 text-xs col-span-full">尚無帳戶資料</div>`;
+        return;
+      }
+
+      let html = '';
+      for (const [acc, amt] of Object.entries(accountTotals)) {
+        const pct = totalTwd > 0 ? ((amt / totalTwd) * 100).toFixed(1) : 0;
+        html += `
+          <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 space-y-1">
+            <div class="text-xs text-slate-400 truncate">${acc}</div>
+            <div class="text-base font-bold text-slate-200">NT$ ${Math.round(amt).toLocaleString()}</div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div class="bg-emerald-500 h-1.5 rounded-full" style="width: ${pct}%"></div>
+            </div>
+            <div class="text-[10px] text-slate-500 text-right">${pct}%</div>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
     }
 
     function toggleSymbolInput(type) {
@@ -430,7 +498,7 @@
       } else {
         symbolContainer.classList.remove('hidden');
         priceContainer.classList.remove('hidden');
-        qtyLabel.innerText = '持有數量 / 股數';
+        qtyLabel.innerText = '本次增加數量 / 股數';
       }
     }
 
@@ -440,7 +508,8 @@
 
       const name = document.getElementById('new-asset-name').value;
       const type = document.getElementById('new-asset-type').value;
-      let symbol = document.getElementById('new-asset-symbol').value.trim();
+      let symbol = document.getElementById('new-asset-symbol').value.trim().toUpperCase();
+      const account = document.getElementById('new-asset-account').value.trim() || '預設帳戶';
       const quantity = parseFloat(document.getElementById('new-asset-qty').value);
       let current_price = parseFloat(document.getElementById('new-asset-price').value) || 1;
       const currency = document.getElementById('new-asset-currency').value;
@@ -450,14 +519,36 @@
         current_price = 1;
       }
 
-      const { error } = await supabaseClient.from('assets').insert([{
-        user_id: currentUser.id, name, symbol, type, quantity, current_price, currency
-      }]);
+      // 檢查是否有同代碼 + 同存放帳戶的既有資產（防呆自動合併機制）
+      const existingAsset = loadedAssets.find(a => 
+        (type === 'cash' ? a.type === 'cash' : a.symbol === symbol) && 
+        (a.account || '預設帳戶') === account
+      );
 
-      if (error) alert('新增資產失敗: ' + error.message);
-      else {
-        toggleAssetModal(false);
-        loadAssets();
+      if (existingAsset) {
+        // 如果已存在，進行【股數加總更新】
+        const updatedQty = parseFloat(existingAsset.quantity) + quantity;
+        const { error } = await supabaseClient.from('assets')
+          .update({ quantity: updatedQty, current_price: current_price })
+          .eq('id', existingAsset.id);
+
+        if (error) alert('更新資產失敗: ' + error.message);
+        else {
+          alert(`已自動併入「${account}」帳戶中的 ${symbol || name}！總股數更新為: ${updatedQty}`);
+          toggleAssetModal(false);
+          loadAssets();
+        }
+      } else {
+        // 不存在則新建一筆
+        const { error } = await supabaseClient.from('assets').insert([{
+          user_id: currentUser.id, name, symbol, type, quantity, current_price, currency, account
+        }]);
+
+        if (error) alert('新增資產失敗: ' + error.message);
+        else {
+          toggleAssetModal(false);
+          loadAssets();
+        }
       }
     }
 
