@@ -3,811 +3,1427 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>個人資產管理系統 V3</title>
+  <title>個人資產管理系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- 📈 引入 Chart.js 圖表庫 -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
   <style>
-    html { scroll-behavior:smooth; }
-    body { background:#020617; }
-    .glass { background:rgba(15,23,42,.82); backdrop-filter:blur(14px); }
-    .input { width:100%; background:#020617; border:1px solid #334155; border-radius:.75rem; padding:.65rem .8rem; color:#e2e8f0; outline:none; }
-    .input:focus { border-color:#10b981; box-shadow:0 0 0 2px rgba(16,185,129,.12); }
-    .btn { border-radius:.75rem; padding:.6rem .9rem; font-size:.82rem; font-weight:600; transition:.18s; }
-    .btn:hover { transform:translateY(-1px); }
-    .card { background:#0f172a; border:1px solid #1e293b; border-radius:1rem; }
-    .chip { display:inline-flex; align-items:center; border:1px solid #334155; background:#1e293b; border-radius:999px; padding:.18rem .55rem; font-size:.7rem; }
-    .tab.active { color:#34d399; border-color:#10b981; background:rgba(16,185,129,.08); }
-    .warn-banner { background:rgba(217,119,6,.1); border:1px solid rgba(217,119,6,.4); color:#fbbf24; }
+    html { scroll-behavior: smooth; }
+    .tab-btn.active {
+      color: #34d399;
+      border-color: #10b981;
+      background-color: rgba(16, 185, 129, 0.1);
+    }
   </style>
 </head>
-<body class="text-slate-100 min-h-screen">
-<div class="max-w-[1500px] mx-auto p-4 md:p-6 space-y-5">
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 md:p-8">
 
-  <header class="glass border border-slate-800 rounded-2xl p-5 shadow-2xl">
-    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header Zone -->
+    <header class="flex flex-col md:flex-row justify-between items-center bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
       <div>
-        <div class="text-2xl md:text-3xl font-black text-emerald-400">💰 個人資產管理系統 <span class="text-xs align-middle text-slate-500">V3</span></div>
-        <p class="text-sm text-slate-400 mt-1">資產、帳戶、收支連動與投資配置集中管理</p>
+        <h1 class="text-2xl font-bold text-emerald-400">💰 個人資產管理系統</h1>
+        <p class="text-sm text-slate-400 mt-1">跨裝置連動 · 台/美/日自動抓價 · 收支連動現金帳戶 · 資產圖表分析</p>
       </div>
-      <div id="auth-status-header"></div>
+      <div id="auth-status-header" class="mt-4 md:mt-0"></div>
+    </header>
+
+    <!-- 登入 / 註冊 區塊 (未登入時顯示) -->
+    <div id="auth-card" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg max-w-md mx-auto space-y-4">
+      <h2 id="auth-title" class="text-xl font-bold text-emerald-400 text-center">🔑 帳號登入 / 註冊</h2>
+      <form onsubmit="handleAuth(event)" class="space-y-4 text-sm">
+        <div>
+          <label class="block text-slate-400 mb-1">電子郵件 (Email)</label>
+          <input type="email" id="auth-email" placeholder="your@email.com" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-emerald-500 focus:outline-none" required>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">密碼 (Password)</label>
+          <input type="password" id="auth-password" placeholder="請輸入密碼" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-emerald-500 focus:outline-none" required>
+        </div>
+        <div class="flex gap-3">
+          <button type="submit" id="btn-login" onclick="authMode='login'" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-xl transition">直接登入</button>
+          <button type="submit" id="btn-signup" onclick="authMode='signup'" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-2.5 rounded-xl transition">註冊新帳號</button>
+        </div>
+        <div class="text-center pt-2">
+          <button type="button" onclick="handleResetPassword()" class="text-xs text-slate-400 hover:text-emerald-400 underline">忘記密碼？點此發送重設信</button>
+        </div>
+      </form>
     </div>
-  </header>
 
-  <section id="auth-card" class="card max-w-md mx-auto p-6 shadow-xl">
-    <h2 id="auth-title" class="text-xl font-bold text-emerald-400 text-center mb-5">🔑 帳號登入 / 註冊</h2>
-    <form onsubmit="handleAuth(event)" class="space-y-4 text-sm">
-      <div><label class="block text-slate-400 mb-1">電子郵件</label><input id="auth-email" type="email" class="input" placeholder="your@email.com" required></div>
-      <div><label class="block text-slate-400 mb-1">密碼</label><input id="auth-password" type="password" class="input" required></div>
-      <div class="flex gap-3">
-        <button class="btn w-1/2 bg-emerald-600 hover:bg-emerald-500" type="submit" onclick="authMode='login'">直接登入</button>
-        <button class="btn w-1/2 bg-slate-700 hover:bg-slate-600" type="submit" onclick="authMode='signup'">註冊</button>
-      </div>
-      <button type="button" onclick="handleResetPassword()" class="w-full text-xs text-slate-400 hover:text-emerald-400 underline">忘記密碼？</button>
-    </form>
-  </section>
-
-  <main id="main-app" class="hidden space-y-5">
-    <div id="accounts-table-warning" class="hidden warn-banner rounded-2xl p-4 text-xs leading-relaxed">
-      ⚠️ 尚未偵測到 <code>accounts</code> 資料表，帳戶管理頁面的「新增/編輯/刪除帳戶」功能會停用。不過別擔心，你所有的資產資料都還在，系統會自動用資產裡既有的帳戶名稱顯示。想啟用完整帳戶管理，請到 Supabase SQL Editor 執行本檔案最下方註解裡附的 SQL 語法。
-    </div>
-
-    <nav class="card p-2 flex flex-wrap gap-2">
-      <button class="tab active btn border border-slate-700" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
-      <button class="tab btn border border-transparent text-slate-400" data-tab="assets" onclick="switchTab('assets')">💰 資產</button>
-      <button class="tab btn border border-transparent text-slate-400" data-tab="accounts" onclick="switchTab('accounts')">🏦 帳戶</button>
-      <button class="tab btn border border-transparent text-slate-400" data-tab="transactions" onclick="switchTab('transactions')">💳 收支</button>
-    </nav>
-
-    <!-- Dashboard -->
-    <section id="tab-dashboard" class="space-y-5">
-      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
-        <div class="card p-5"><div class="text-xs text-slate-400">總資產估值</div><div id="total-assets" class="text-2xl font-black text-emerald-400 mt-2">NT$ 0</div></div>
-        <div class="card p-5"><div class="text-xs text-slate-400">股票 / ETF</div><div id="stat-stock" class="text-2xl font-black mt-2">NT$ 0</div></div>
-        <div class="card p-5"><div class="text-xs text-slate-400">現金 / 存款</div><div id="stat-cash" class="text-2xl font-black mt-2">NT$ 0</div></div>
-        <div class="card p-5"><div class="text-xs text-slate-400">其他資產</div><div id="stat-other" class="text-2xl font-black mt-2">NT$ 0</div></div>
-        <div class="card p-5"><div class="text-xs text-slate-400">USD / TWD</div><div id="usd-rate" class="text-2xl font-black text-blue-400 mt-2">載入中…</div></div>
-        <div class="card p-5"><div class="text-xs text-slate-400">JPY / TWD</div><div id="jpy-rate" class="text-2xl font-black text-amber-400 mt-2">載入中…</div></div>
+    <!-- 主要內容區塊 (登入後顯示) -->
+    <div id="main-app" class="hidden space-y-6">
+      <!-- ⚠️ 帳戶資料表提示資訊 (當 Supabase 尚未建立 accounts 時) -->
+      <div id="accounts-table-warning" class="hidden bg-amber-500/10 border border-amber-500/40 text-amber-300 rounded-2xl p-4 text-xs leading-relaxed">
+        ⚠️ 尚未偵測到 Supabase 的 <code>accounts</code> 資料表。系統已自動套用資產既有帳戶顯示，不影響一般使用。如需啟用新增/編輯獨立帳戶功能，請在 Supabase SQL Editor 建立資料表。
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div class="card p-5 lg:col-span-2">
-          <div class="flex justify-between items-center mb-4">
-            <div><h2 class="font-bold text-lg">資產配置</h2><p class="text-xs text-slate-500">依資產類別計算</p></div>
-            <button class="btn bg-slate-800 hover:bg-slate-700" onclick="refreshAll()">🔄 更新</button>
+      <!-- 📌 功能分頁導覽列 -->
+      <nav class="bg-slate-800 p-2 rounded-2xl border border-slate-700 flex flex-wrap gap-2 text-xs font-semibold">
+        <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="tab-btn active px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-emerald-400 transition">📊 總覽儀表板</button>
+        <button onclick="switchTab('assets')" id="tab-btn-assets" class="tab-btn px-4 py-2.5 rounded-xl border border-transparent text-slate-400 hover:text-emerald-400 transition">💰 資產清單管理</button>
+        <button onclick="switchTab('accounts')" id="tab-btn-accounts" class="tab-btn px-4 py-2.5 rounded-xl border border-transparent text-slate-400 hover:text-emerald-400 transition">🏦 帳戶清單管理</button>
+        <button onclick="switchTab('transactions')" id="tab-btn-transactions" class="tab-btn px-4 py-2.5 rounded-xl border border-transparent text-slate-400 hover:text-emerald-400 transition">💳 快速收支與明細</button>
+      </nav>
+
+      <!-- 📊 Tab 1: 總覽儀表板 (Dashboard) -->
+      <section id="tab-dashboard" class="space-y-6">
+        <!-- 總資產與分類估值卡片 -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md col-span-2 sm:col-span-1 lg:col-span-2">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">總資產估值 (TWD)</span>
+            <div id="total-assets" class="text-3xl font-extrabold text-emerald-400 mt-1">NT$ 0</div>
           </div>
-          <div class="h-72"><canvas id="allocation-chart"></canvas></div>
+          <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-md">
+            <span class="text-xs text-slate-400 block">📈 股票 / ETF</span>
+            <div id="stat-stock" class="text-lg font-bold text-slate-200 mt-1">NT$ 0</div>
+          </div>
+          <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-md">
+            <span class="text-xs text-slate-400 block">💵 現金 / 存款</span>
+            <div id="stat-cash" class="text-lg font-bold text-slate-200 mt-1">NT$ 0</div>
+          </div>
+          <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-md">
+            <span class="text-xs text-slate-400 block">USD/TWD 匯率</span>
+            <div id="usd-rate" class="text-lg font-bold text-blue-400 mt-1">載入中...</div>
+          </div>
+          <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-md">
+            <span class="text-xs text-slate-400 block">JPY/TWD 匯率</span>
+            <div id="jpy-rate" class="text-lg font-bold text-amber-400 mt-1">載入中...</div>
+          </div>
         </div>
-        <div class="card p-5">
-          <h2 class="font-bold text-lg mb-4">🏦 帳戶分布</h2>
-          <div id="dashboard-account-list" class="space-y-3"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- 圖表區塊 (佔 7 格) -->
+          <div class="lg:col-span-7 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+              <h2 class="text-lg font-bold text-slate-200">📈 資產類別配置比例</h2>
+              <button onclick="loadAssets()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-slate-300">🔄 重新整理</button>
+            </div>
+            <div class="h-64 relative flex items-center justify-center">
+              <canvas id="allocation-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- 各帳戶資產分佈統計 (佔 5 格) -->
+          <div class="lg:col-span-5 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
+            <h2 class="text-lg font-bold text-slate-200 border-b border-slate-700 pb-3">🏦 各帳戶資產分佈概況</h2>
+            <div id="account-distribution" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto pr-1">
+              <div class="text-slate-500 text-xs col-span-full">計算帳戶資料中...</div>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div class="card p-5">
-        <h2 class="font-bold text-lg mb-4">📌 最近資產</h2>
-        <div id="recent-assets" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3"></div>
-      </div>
-    </section>
+      <!-- 💰 Tab 2: 資產清單管理 (Assets) -->
+      <section id="tab-assets" class="space-y-6">
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-700 pb-4">
+            <h2 class="text-xl font-bold text-slate-200">📊 個人資產清單</h2>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="toggleExportModal(true)" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-xl text-xs font-medium transition">📥 匯出 CSV</button>
+              <button onclick="loadAssets()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-xl text-xs font-medium transition">🔄 重新抓價</button>
+              <button onclick="openAssetModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition">+ 新增資產</button>
+            </div>
+          </div>
 
-    <!-- Assets -->
-    <section id="tab-assets" class="hidden space-y-5">
-      <div class="card p-5">
-        <div class="flex flex-col xl:flex-row xl:items-end gap-3">
-          <div class="flex-1"><label class="text-xs text-slate-400">搜尋資產</label><input id="asset-search" class="input mt-1" placeholder="搜尋名稱、代碼、帳戶…" oninput="renderAssets()"></div>
-          <div><label class="text-xs text-slate-400">檢視方式</label><select id="asset-view" class="input mt-1" onchange="renderAssets()"><option value="flat">全部列表</option><option value="account">依帳戶</option><option value="category">依資產類別</option><option value="currency">依幣別</option></select></div>
-          <div><label class="text-xs text-slate-400">帳戶</label><select id="asset-filter-account" class="input mt-1" onchange="renderAssets()"><option value="all">全部帳戶</option></select></div>
-          <div><label class="text-xs text-slate-400">類別</label><select id="asset-filter-category" class="input mt-1" onchange="renderAssets()"><option value="all">全部類別</option><option value="stock">股票 / ETF</option><option value="cash">現金 / 存款</option><option value="fund">基金</option><option value="gold">黃金</option><option value="other">其他</option></select></div>
-          <div><label class="text-xs text-slate-400">排序</label><select id="asset-sort" class="input mt-1" onchange="renderAssets()"><option value="value_desc">市值：高 → 低</option><option value="value_asc">市值：低 → 高</option><option value="name">名稱 A → Z</option><option value="account">帳戶 A → Z</option></select></div>
-          <button class="btn bg-slate-800 hover:bg-slate-700" onclick="exportAssetsCSV()">📥 匯出 CSV</button>
-          <button class="btn bg-emerald-600 hover:bg-emerald-500" onclick="openAssetModal()">＋ 新增資產</button>
+          <!-- 🔍 查詢、進階過濾與分類檢視工具列 -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 text-xs">
+            <div class="lg:col-span-1">
+              <label class="text-slate-400 block mb-1">關鍵字搜尋</label>
+              <input type="text" id="asset-search" oninput="renderAssetView()" placeholder="搜尋名稱、代碼、帳戶..." class="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500">
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">檢視分組方式</label>
+              <select id="asset-group-mode" onchange="renderAssetView()" class="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-2 focus:outline-none">
+                <option value="flat">明細清單 (不分組)</option>
+                <option value="account">依存放帳戶</option>
+                <option value="type">依庫存類別</option>
+                <option value="symbol">依資產標的</option>
+                <option value="currency">依計價幣別</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">篩選帳戶</label>
+              <select id="asset-filter-account" onchange="renderAssetView()" class="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-2 focus:outline-none">
+                <option value="all">全部帳戶</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">篩選類別</label>
+              <select id="asset-filter-type" onchange="renderAssetView()" class="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-2 focus:outline-none">
+                <option value="all">全部類別</option>
+                <option value="stock">📈 股票/ETF</option>
+                <option value="cash">💵 現金/存款</option>
+                <option value="fund">🏦 基金</option>
+                <option value="gold">🏆 黃金</option>
+                <option value="other">📦 其他</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">排序方式</label>
+              <select id="asset-sort-mode" onchange="renderAssetView()" class="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-2 focus:outline-none">
+                <option value="val_desc">市值：高 → 低</option>
+                <option value="val_asc">市值：低 → 高</option>
+                <option value="name_asc">名稱：A → Z</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 資產內容展示區 -->
+          <div id="asset-display-container" class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-300">
+              <thead class="text-xs uppercase bg-slate-700/50 text-slate-400">
+                <tr>
+                  <th class="p-3">名稱 / 代碼</th>
+                  <th class="p-3">存放帳戶</th>
+                  <th class="p-3">數量</th>
+                  <th class="p-3">最新價格 / 幣別</th>
+                  <th class="p-3">折算台幣</th>
+                  <th class="p-3 text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody id="asset-table-body" class="divide-y divide-slate-700">
+                <tr><td colspan="6" class="text-center p-6 text-slate-500">載入中...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-      <div class="card p-5">
-        <div class="flex justify-between items-center mb-4"><h2 class="font-bold text-lg">📊 資產清單</h2><span id="asset-count" class="text-xs text-slate-500"></span></div>
-        <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="text-xs text-slate-400 border-b border-slate-700"><tr><th class="p-3 text-left">名稱 / 代碼</th><th class="p-3 text-left">類別</th><th class="p-3 text-left">帳戶</th><th class="p-3 text-right">數量</th><th class="p-3 text-right">價格</th><th class="p-3 text-right">台幣市值</th><th class="p-3 text-center">操作</th></tr></thead><tbody id="asset-table-body"></tbody></table></div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Accounts -->
-    <section id="tab-accounts" class="hidden space-y-5">
-      <div class="card p-5">
-        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-          <div><h2 class="font-bold text-xl">🏦 帳戶管理</h2><p class="text-xs text-slate-500 mt-1">新增後會出現在資產新增表單的下拉選單</p></div>
-          <button class="btn bg-emerald-600 hover:bg-emerald-500" onclick="openAccountModal()">＋ 新增帳戶</button>
+      <!-- 🏦 Tab 3: 帳戶清單管理 (Accounts) -->
+      <section id="tab-accounts" class="space-y-6">
+        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-bold text-slate-200">🏦 存放帳戶 / 券商管理</h2>
+            <p class="text-xs text-slate-400 mt-1">管理你的銀行存款與證券戶，此處帳戶會自動連動新增資產時的選單。</p>
+          </div>
+          <button onclick="openAccountModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-medium transition">+ 新增帳戶</button>
         </div>
-      </div>
-      <div id="accounts-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-    </section>
 
-    <!-- Transactions -->
-    <section id="tab-transactions" class="hidden space-y-5">
-      <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        <div class="card p-5 lg:col-span-2">
-          <h2 class="font-bold text-lg mb-4">💳 新增收支</h2>
-          <form onsubmit="handleTransaction(event)" class="space-y-3 text-sm">
-            <div><label class="text-xs text-slate-400">交易類型</label><select id="tx-type" class="input mt-1" onchange="updateTxLinkHint(this.value)"><option value="income">💵 收入</option><option value="expense">💸 支出</option><option value="realize">🔄 資產變現</option></select></div>
+        <div id="accounts-grid-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="text-slate-500 text-sm col-span-full">帳戶資料載入中...</div>
+        </div>
+      </section>
 
-            <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
-              <label class="block text-xs text-emerald-400 font-semibold" id="tx-asset-link-label">🏦 連動加算銀行/現金帳戶（選填）：</label>
-              <select id="tx-target-asset-id" class="input"><option value="">-- 不連動變更帳戶（僅純紀錄收支）--</option></select>
-              <p id="tx-asset-link-hint" class="text-[11px] text-slate-500">選擇現金帳戶後，此筆收入將自動加總至該帳戶餘額中。</p>
+      <!-- 💳 Tab 4: 快速收支與紀錄 (Transactions) -->
+      <section id="tab-transactions" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- 左側：登記表單 (占 5 格) -->
+        <div class="lg:col-span-5 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
+          <h2 class="text-xl font-bold text-slate-200 border-b border-slate-700 pb-4">💳 快速收支與變現登記</h2>
+          <form id="tx-form" onsubmit="handleTransaction(event)" class="space-y-4 text-sm">
+            <div>
+              <label class="block text-slate-400 mb-1">交易類型</label>
+              <select id="tx-type" onchange="updateTxLinkHint(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+                <option value="income">💵 收入 (加算至銀行帳戶)</option>
+                <option value="expense">💸 支出 (從銀行帳戶扣除)</option>
+                <option value="realize">🔄 資產變現/賣出 (賣出資產轉為現金)</option>
+              </select>
             </div>
 
-            <div><label class="text-xs text-slate-400">說明 / 分類</label><input id="tx-category" class="input mt-1" placeholder="例如：薪資、股息、生活費" required></div>
-            <div><label class="text-xs text-slate-400">金額（TWD，若連動外幣帳戶請輸入外幣原幣金額）</label><input id="tx-amount" type="number" step="any" class="input mt-1" required></div>
-            <div><label class="text-xs text-slate-400">日期</label><input id="tx-date" type="date" class="input mt-1" required></div>
-            <button class="btn w-full bg-blue-600 hover:bg-blue-500">紀錄並連動更新資產</button>
+            <div id="tx-asset-link-container" class="p-3 bg-slate-900/60 border border-slate-700 rounded-xl space-y-2">
+              <label class="block text-xs text-emerald-400 font-semibold" id="tx-asset-link-label">🏦 連動變更之銀行/現金帳戶 (選填)：</label>
+              <select id="tx-target-asset-id" class="w-full bg-slate-800 border border-slate-700 text-slate-200 rounded-lg p-2 text-xs">
+                <option value="">-- 不連動變更帳戶 (僅純紀錄收支) --</option>
+              </select>
+              <p id="tx-asset-link-hint" class="text-[11px] text-slate-400">選擇銀行帳戶後，此筆收入將會自動加總至該帳戶存款中。</p>
+            </div>
+
+            <div>
+              <label class="block text-slate-400 mb-1">說明 / 分類</label>
+              <input type="text" id="tx-category" placeholder="例如：薪資、買菜、賣出美股" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">金額/變更數量 (若選連動外幣現金請輸入外幣原幣金額)</label>
+              <input type="number" id="tx-amount" step="any" placeholder="0" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">日期</label>
+              <input type="date" id="tx-date" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl transition">紀錄並連動更新資產</button>
           </form>
         </div>
-        <div class="card p-5 lg:col-span-3">
-          <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
-            <h2 class="font-bold text-lg">📜 收支歷史</h2>
-            <div class="flex gap-2">
-              <select id="tx-month-filter" onchange="renderTransactions()" class="input sm:w-40"><option value="all">全部紀錄</option></select>
-              <button class="btn bg-slate-800 hover:bg-slate-700" onclick="exportTransactionsCSV()">📥 匯出</button>
+
+        <!-- 右側：收支明細與月份過濾 (占 7 格) -->
+        <div class="lg:col-span-7 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-700 pb-3 gap-2">
+            <h3 class="text-lg font-bold text-slate-200">📜 收支歷史明細</h3>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400">月份:</span>
+              <select id="tx-month-filter" onchange="renderTransactions()" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg p-1.5">
+                <option value="all">全部紀錄</option>
+              </select>
             </div>
           </div>
-          <div class="grid grid-cols-3 gap-2 text-center text-xs mb-4">
-            <div class="bg-slate-950 p-3 rounded-xl"><div class="text-slate-500">收入</div><div id="sum-income" class="text-emerald-400 font-bold mt-1">NT$ 0</div></div>
-            <div class="bg-slate-950 p-3 rounded-xl"><div class="text-slate-500">支出</div><div id="sum-expense" class="text-rose-400 font-bold mt-1">NT$ 0</div></div>
-            <div class="bg-slate-950 p-3 rounded-xl"><div class="text-slate-500">淨額</div><div id="sum-net" class="text-blue-400 font-bold mt-1">NT$ 0</div></div>
+
+          <div id="month-summary" class="grid grid-cols-3 gap-2 text-center text-xs bg-slate-900/40 p-2.5 rounded-xl border border-slate-700/40">
+            <div><span class="text-slate-400 block">總收入</span><span id="sum-income" class="text-emerald-400 font-bold">NT$ 0</span></div>
+            <div><span class="text-slate-400 block">總支出</span><span id="sum-expense" class="text-rose-400 font-bold">NT$ 0</span></div>
+            <div><span class="text-slate-400 block">淨額</span><span id="sum-net" class="text-blue-400 font-bold">NT$ 0</span></div>
           </div>
-          <div id="tx-list" class="space-y-2 max-h-[420px] overflow-y-auto"></div>
+
+          <div class="overflow-y-auto max-h-[400px] space-y-2 pr-1" id="tx-list">
+            <div class="text-center p-4 text-slate-500 text-xs">載入紀錄中...</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Modal 1: 新增 / 編輯資產彈窗 -->
+  <div id="asset-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="text-lg font-bold text-slate-100" id="asset-modal-title">➕ 新增 / 併入資產項目</h3>
+        <button onclick="toggleAssetModal(false)" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+      <form onsubmit="handleAddOrUpdateAsset(event)" class="space-y-3 text-sm">
+        <input type="hidden" id="edit-asset-id">
+        <div>
+          <label class="block text-slate-400 mb-1">資產類別</label>
+          <select id="new-asset-type" onchange="toggleSymbolInput(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+            <option value="stock" selected>📈 股票 / ETF</option>
+            <option value="cash">💵 現金 / 存款</option>
+            <option value="fund">🏦 基金 / 連結基金</option>
+            <option value="gold">🏆 黃金 / 貴金屬</option>
+            <option value="other">📦 其他</option>
+          </select>
+        </div>
+        <div id="symbol-container">
+          <label class="block text-slate-400 mb-1">股票代碼 (輸入代碼將自動帶入名稱與幣別)</label>
+          <input type="text" id="new-asset-symbol" oninput="handleSymbolInput(this.value)" placeholder="例如：0050, VOO 或 7203" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">資產名稱 (系統自動帶入，亦可自行修改)</label>
+          <input type="text" id="new-asset-name" placeholder="例如：美金、日圓、Vanguard S&P 500 ETF" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">存放帳戶 / 券商</label>
+          <select id="new-asset-account-select" onchange="handleAccountSelectChange(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+          </select>
+          <input type="text" id="new-asset-account-custom" placeholder="請輸入新帳戶名稱 (例如：中國信託、永豐銀行)" class="hidden w-full bg-slate-900 border border-emerald-500 rounded-xl p-2.5 text-slate-200 mt-2">
+        </div>
+        <div>
+          <label id="qty-label" class="block text-slate-400 mb-1">本次增加數量 / 股數</label>
+          <input type="number" id="new-asset-qty" step="any" placeholder="若同帳戶且同幣別已存在，將自動加總" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+        </div>
+        <div id="price-container">
+          <label class="block text-slate-400 mb-1">預設/備用單價</label>
+          <input type="number" id="new-asset-price" step="any" value="1" placeholder="1" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">計價幣別</label>
+          <select id="new-asset-currency" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+            <option value="TWD">新台幣 (TWD)</option>
+            <option value="USD">美元 (USD)</option>
+            <option value="JPY">日幣 (JPY)</option>
+          </select>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="toggleAssetModal(false)" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-slate-300 py-2.5 rounded-xl transition">取消</button>
+          <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl transition">確定儲存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 2: 資產微調/增減彈窗 -->
+  <div id="adjust-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-sm space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="text-lg font-bold text-slate-100" id="adjust-title">⚙️ 調整資產數量/金額</h3>
+        <button onclick="toggleAdjustModal(false)" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+      <form onsubmit="handleAdjustSubmit(event)" class="space-y-3 text-sm">
+        <input type="hidden" id="adjust-asset-id">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">操作方式</label>
+          <select id="adjust-mode" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200">
+            <option value="add">➕ 增加數量/金額</option>
+            <option value="sub">➖ 減少數量/金額</option>
+            <option value="set">✏️ 直接覆蓋設定為新數量</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">調整數值 (原幣別單位)</label>
+          <input type="number" id="adjust-amount" step="any" placeholder="請輸入變動數量" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="toggleAdjustModal(false)" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-slate-300 py-2.5 rounded-xl transition">取消</button>
+          <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl transition">確認調整</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 3: 帳戶新增/編輯彈窗 -->
+  <div id="account-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-sm space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="text-lg font-bold text-slate-100" id="account-modal-title">🏦 新增帳戶</h3>
+        <button onclick="toggleAccountModal(false)" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+      <form onsubmit="handleAccountFormSubmit(event)" class="space-y-3 text-sm">
+        <input type="hidden" id="edit-account-id">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">帳戶/券商名稱</label>
+          <input type="text" id="account-name-input" placeholder="例如：國泰世華、富邦證券" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-200" required>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="toggleAccountModal(false)" class="w-1/2 bg-slate-700 hover:bg-slate-600 text-slate-300 py-2.5 rounded-xl transition">取消</button>
+          <button type="submit" class="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl transition">確定儲存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal 4: 匯出資料彈窗 -->
+  <div id="export-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="text-lg font-bold text-slate-100">📥 匯出資料 (CSV)</h3>
+        <button onclick="toggleExportModal(false)" class="text-slate-400 hover:text-slate-200">✕</button>
+      </div>
+      <div class="space-y-4 text-sm">
+        <div class="p-4 bg-slate-900/60 rounded-xl border border-slate-700 space-y-2">
+          <h4 class="font-bold text-emerald-400">1. 匯出個人資產資料</h4>
+          <p class="text-xs text-slate-400">包含所有資產名稱、類別、代碼、帳戶、數量、最新價格及折算台幣等資訊。</p>
+          <button onclick="exportAssetsCSV()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-medium transition">匯出資產清單 CSV</button>
+        </div>
+
+        <div class="p-4 bg-slate-900/60 rounded-xl border border-slate-700 space-y-3">
+          <h4 class="font-bold text-blue-400">2. 匯出收支歷史紀錄</h4>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">選擇範圍：</label>
+            <select id="export-tx-range" class="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg p-2">
+              <option value="all">全部紀錄</option>
+            </select>
+          </div>
+          <button onclick="exportTransactionsCSV()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-xs font-medium transition">匯出收支紀錄 CSV</button>
         </div>
       </div>
-    </section>
-  </main>
-</div>
-
-<!-- Asset Modal -->
-<div id="asset-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 items-center justify-center p-4">
-  <div class="card w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto">
-    <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4"><h3 id="asset-modal-title" class="font-bold text-lg">➕ 新增資產</h3><button onclick="closeAssetModal()" class="text-slate-400">✕</button></div>
-    <form onsubmit="handleAddAsset(event)" class="space-y-3 text-sm">
-      <input id="asset-edit-id" type="hidden">
-      <div><label class="text-xs text-slate-400">資產類別</label><select id="new-asset-type" class="input mt-1" onchange="toggleSymbolInput(this.value)"><option value="stock">📈 股票 / ETF</option><option value="cash">💵 現金 / 存款</option><option value="fund">🏦 基金</option><option value="gold">🏆 黃金</option><option value="other">📦 其他</option></select></div>
-      <div id="symbol-container"><label class="text-xs text-slate-400">股票代碼</label><input id="new-asset-symbol" class="input mt-1" oninput="handleSymbolInput(this.value)" placeholder="例如 0050 / VOO / 7203"></div>
-      <div><label class="text-xs text-slate-400">資產名稱</label><input id="new-asset-name" class="input mt-1" required placeholder="例如 Vanguard S&P 500 ETF"></div>
-      <div>
-        <label class="text-xs text-slate-400">帳戶</label>
-        <select id="new-asset-account" class="input mt-1" onchange="handleAssetAccountSelectChange(this.value)"></select>
-        <input id="new-asset-account-custom" placeholder="請輸入新帳戶名稱" class="input mt-2 hidden border-emerald-600">
-      </div>
-      <div><label id="qty-label" class="text-xs text-slate-400">數量 / 股數</label><input id="new-asset-qty" type="number" step="any" class="input mt-1" required></div>
-      <div id="price-container"><label class="text-xs text-slate-400">備用單價</label><input id="new-asset-price" type="number" step="any" value="1" class="input mt-1"></div>
-      <div><label class="text-xs text-slate-400">計價幣別</label><select id="new-asset-currency" class="input mt-1"><option value="TWD">新台幣 (TWD)</option><option value="USD">美元 (USD)</option><option value="JPY">日幣 (JPY)</option></select></div>
-      <div><label class="text-xs text-slate-400">備註</label><input id="new-asset-remark" class="input mt-1" placeholder="可留空"></div>
-      <div class="flex gap-2 pt-2"><button type="button" onclick="closeAssetModal()" class="btn w-1/2 bg-slate-700">取消</button><button class="btn w-1/2 bg-emerald-600 hover:bg-emerald-500">儲存</button></div>
-    </form>
+    </div>
   </div>
-</div>
 
-<!-- Adjust Modal -->
-<div id="adjust-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 items-center justify-center p-4">
-  <div class="card w-full max-w-sm p-6">
-    <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4"><h3 id="adjust-title" class="font-bold text-lg">⚙️ 調整資產數量</h3><button onclick="closeAdjustModal()" class="text-slate-400">✕</button></div>
-    <form onsubmit="handleAdjustSubmit(event)" class="space-y-3 text-sm">
-      <input id="adjust-asset-id" type="hidden">
-      <div><label class="text-xs text-slate-400">操作方式</label><select id="adjust-mode" class="input mt-1"><option value="add">➕ 增加數量/金額</option><option value="sub">➖ 減少數量/金額</option><option value="set">✏️ 直接覆蓋為新數量</option></select></div>
-      <div><label class="text-xs text-slate-400">調整數值（原幣別單位）</label><input id="adjust-amount" type="number" step="any" class="input mt-1" required></div>
-      <div class="flex gap-2 pt-2"><button type="button" onclick="closeAdjustModal()" class="btn w-1/2 bg-slate-700">取消</button><button class="btn w-1/2 bg-emerald-600 hover:bg-emerald-500">確認調整</button></div>
-    </form>
-  </div>
-</div>
+  <script>
+    const SUPABASE_URL = 'https://zsrnxfluhqjseltmgimm.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_ix_4ZSypiUVpMxdDzE8Frg___QsGMfO';
 
-<!-- Account Modal -->
-<div id="account-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 items-center justify-center p-4">
-  <div class="card w-full max-w-md p-6">
-    <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4"><h3 id="account-modal-title" class="font-bold text-lg">🏦 新增帳戶</h3><button onclick="closeAccountModal()" class="text-slate-400">✕</button></div>
-    <form onsubmit="saveAccount(event)" class="space-y-3 text-sm">
-      <input id="account-edit-id" type="hidden">
-      <div><label class="text-xs text-slate-400">帳戶名稱</label><input id="account-name" class="input mt-1" placeholder="例如：Firstrade" required></div>
-      <div><label class="text-xs text-slate-400">帳戶類型</label><select id="account-type" class="input mt-1"><option value="broker">券商</option><option value="bank">銀行</option><option value="cash">現金</option><option value="other">其他</option></select></div>
-      <div class="flex gap-2 pt-2"><button type="button" onclick="closeAccountModal()" class="btn w-1/2 bg-slate-700">取消</button><button class="btn w-1/2 bg-emerald-600">儲存</button></div>
-    </form>
-  </div>
-</div>
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-<script>
-const SUPABASE_URL = 'https://zsrnxfluhqjseltmgimm.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_ix_4ZSypiUVpMxdDzE8Frg___QsGMfO';
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // 重設密碼發送事件監聽
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setTimeout(async () => {
+          const newPassword = prompt('驗證成功！請輸入你的新密碼：');
+          if (newPassword && newPassword.trim() !== '') {
+            const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+            if (error) alert('密碼更新失敗：' + error.message);
+            else alert('新密碼已成功變更！下次請使用新密碼登入。');
+          }
+        }, 500);
+      }
+    });
 
-let currentUser = null, authMode = 'login';
-let currentUsdRate = 32.21, currentJpyRate = 0.215;
-let accountsTableExists = true;
-let accounts = [];          // rows from `accounts` table (real, editable)
-let effectiveAccountNames = []; // accounts ∪ distinct asset.account values, used for dropdowns/visibility
-let rawTransactions = [], loadedAssets = [], assetValues = [];
-let allocationChart = null;
+    let currentUsdRate = 32.21;
+    let currentJpyRate = 0.215;
+    let currentUser = null;
+    let authMode = 'login';
+    let rawTransactions = [];
+    let loadedAssets = [];
+    let dbAccounts = [];
+    let userAccountsList = ['預設帳戶', '永豐銀行', '永豐金證券', '國泰世華', '第一證券', '玉山銀行'];
+    let hasAccountsTable = true;
+    let allocationChart = null;
 
-const knownStockNames = {
-  VOO:'Vanguard S&P 500 ETF', QQQ:'Invesco QQQ Trust', SPY:'SPDR S&P 500 ETF Trust',
-  VT:'Vanguard Total World Stock ETF', AAPL:'Apple Inc.', NVDA:'NVIDIA Corporation',
-  TSLA:'Tesla, Inc.', MSFT:'Microsoft Corporation', '0050':'元大台灣50', '0056':'元大高股息',
-  '00878':'國泰永續高股息', '00919':'群益台灣精選高息', '00929':'復華台灣科技優息',
-  '2330':'台積電', '7203':'豐田汽車 (Toyota)', '9984':'軟銀集團 (SoftBank)'
-};
-const typeMap = {stock:'股票 / ETF', cash:'現金 / 存款', fund:'基金', gold:'黃金', other:'其他'};
-const accountTypeMap = {broker:'券商', bank:'銀行', cash:'現金', other:'其他'};
+    const knownStockNames = {
+      'VOO': 'Vanguard S&P 500 ETF',
+      'QQQ': 'Invesco QQQ Trust',
+      'SPY': 'SPDR S&P 500 ETF Trust',
+      'VT': 'Vanguard Total World Stock ETF',
+      'AAPL': 'Apple Inc.',
+      'NVDA': 'NVIDIA Corporation',
+      'TSLA': 'Tesla, Inc.',
+      'MSFT': 'Microsoft Corporation',
+      '0050': '元大台灣50',
+      '0056': '元大高股息',
+      '00878': '國泰永續高股息',
+      '00919': '群益台灣精選高息',
+      '00929': '復華台灣科技優息',
+      '2330': '台積電',
+      '7203': '豐田汽車 (Toyota)',
+      '9984': '軟銀集團 (SoftBank)'
+    };
 
-function esc(v) {
-  return String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
-}
-function money(n) { return 'NT$ ' + Math.round(Number(n)||0).toLocaleString(); }
-function openModal(id){ const e=document.getElementById(id); e.classList.remove('hidden'); e.classList.add('flex'); }
-function closeModal(id){ const e=document.getElementById(id); e.classList.add('hidden'); e.classList.remove('flex'); }
+    const typeMap = {
+      'stock': '📈 股票/ETF',
+      'fund': '🏦 基金/連結基金',
+      'cash': '💵 現金/存款',
+      'gold': '🏆 黃金/貴金屬',
+      'other': '📦 其他'
+    };
 
-async function init() {
-  document.getElementById('tx-date').value = new Date().toISOString().slice(0,10);
-  await fetchRates();
-  const {data:{user}} = await supabaseClient.auth.getUser();
-  currentUser = user;
-  updateUI();
-  supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (event === 'PASSWORD_RECOVERY') {
-      setTimeout(async()=>{
-        const p = prompt('請輸入新密碼：');
-        if (p) {
-          const {error}=await supabaseClient.auth.updateUser({password:p});
-          alert(error ? '密碼更新失敗：'+error.message : '密碼已更新！');
-        }
-      },500);
+    async function init() {
+      document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+      await fetchRates();
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      currentUser = user;
+      updateUI();
     }
-    currentUser = session?.user || null;
-    updateUI();
-  });
-}
 
-function updateUI() {
-  const authCard=document.getElementById('auth-card'), main=document.getElementById('main-app'), header=document.getElementById('auth-status-header');
-  if (currentUser) {
-    authCard.classList.add('hidden'); main.classList.remove('hidden');
-    header.innerHTML = `<div class="flex items-center gap-3"><span class="text-sm text-slate-300">👤 ${esc(currentUser.email)}</span><button onclick="logout()" class="btn bg-red-950/70 text-red-300 border border-red-800">登出</button></div>`;
-    refreshAll();
-  } else {
-    authCard.classList.remove('hidden'); main.classList.add('hidden'); header.innerHTML='';
-  }
-}
-
-async function handleAuth(e) {
-  e.preventDefault();
-  const email=document.getElementById('auth-email').value.trim(), password=document.getElementById('auth-password').value;
-  const result = authMode==='signup'
-    ? await supabaseClient.auth.signUp({email,password})
-    : await supabaseClient.auth.signInWithPassword({email,password});
-  if(result.error) return alert((authMode==='signup'?'註冊':'登入')+'失敗：'+result.error.message);
-  currentUser=result.data.user; updateUI();
-  if(authMode==='signup') alert('註冊成功！若 Supabase 啟用 Email 驗證，請先完成信箱驗證。');
-}
-async function handleResetPassword() {
-  const email=document.getElementById('auth-email').value.trim();
-  if(!email) return alert('請先輸入 Email。');
-  const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
-  alert(error?'發送失敗：'+error.message:'重設密碼郵件已發送，請至信箱確認。');
-}
-async function logout(){ await supabaseClient.auth.signOut(); currentUser=null; updateUI(); }
-
-// ---- 匯率（USD + JPY，來自 V1）----
-async function fetchRates(){
-  try {
-    const r=await fetch('https://open.er-api.com/v6/latest/USD'); const d=await r.json();
-    if(d?.rates?.TWD){
-      currentUsdRate = Number(d.rates.TWD.toFixed(2));
-      if (d.rates.JPY) currentJpyRate = Number((d.rates.TWD / d.rates.JPY).toFixed(4));
+    function switchTab(tabName) {
+      const tabs = ['dashboard', 'assets', 'accounts', 'transactions'];
+      tabs.forEach(t => {
+        const sec = document.getElementById(`tab-${t}`);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (sec) sec.classList.toggle('hidden', t !== tabName);
+        if (btn) btn.classList.toggle('active', t === tabName);
+      });
     }
-  } catch(e){}
-  document.getElementById('usd-rate').textContent='NT$ '+currentUsdRate.toFixed(2);
-  document.getElementById('jpy-rate').textContent='NT$ '+currentJpyRate.toFixed(4);
-}
 
-async function refreshAll(){
-  if(!currentUser) return;
-  await loadAccounts();   // 先嘗試載入帳戶表（可能不存在）
-  await loadAssets();     // 資產一定會嘗試載入，不受帳戶表影響
-  await loadTransactions();
-  buildEffectiveAccountNames();
-  populateAccountSelects();
-  renderAccounts();
-  renderDashboard();
-}
+    function updateUI() {
+      const authCard = document.getElementById('auth-card');
+      const mainApp = document.getElementById('main-app');
+      const authStatusHeader = document.getElementById('auth-status-header');
 
-// ---- 帳戶（含防呆 fallback，確保舊資產一定看得到）----
-async function loadAccounts(){
-  const {data,error}=await supabaseClient.from('accounts').select('*').order('sort_order',{ascending:true}).order('name',{ascending:true});
-  if(error){
-    accountsTableExists = false;
-    accounts = [];
-    document.getElementById('accounts-table-warning').classList.remove('hidden');
-    console.warn('accounts 資料表尚未建立或讀取失敗：', error.message);
-    return;
-  }
-  accountsTableExists = true;
-  accounts = data || [];
-  document.getElementById('accounts-table-warning').classList.add('hidden');
-}
-
-// 合併「accounts 表裡的帳戶」與「資產裡實際出現、但帳戶表沒有的帳戶名稱」
-function buildEffectiveAccountNames(){
-  const set = new Set(accounts.map(a=>a.name));
-  loadedAssets.forEach(a=>set.add(a.account || '預設帳戶'));
-  if(set.size===0) set.add('預設帳戶');
-  effectiveAccountNames = Array.from(set);
-}
-
-function populateAccountSelects(){
-  const names = effectiveAccountNames.length ? effectiveAccountNames : ['預設帳戶'];
-  const optsHtml = names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('') + `<option value="__NEW__">➕ 新增自訂帳戶...</option>`;
-
-  const assetSel=document.getElementById('new-asset-account');
-  assetSel.innerHTML=optsHtml;
-
-  const filter=document.getElementById('asset-filter-account');
-  const old=filter.value;
-  filter.innerHTML='<option value="all">全部帳戶</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  if([...filter.options].some(o=>o.value===old)) filter.value=old;
-}
-
-function handleAssetAccountSelectChange(val){
-  const customInput=document.getElementById('new-asset-account-custom');
-  if(val==='__NEW__'){ customInput.classList.remove('hidden'); customInput.focus(); }
-  else { customInput.classList.add('hidden'); }
-}
-
-function openAccountModal(id=''){
-  if(!accountsTableExists){
-    alert('尚未偵測到 accounts 資料表，請先到 Supabase SQL Editor 執行本檔案最下方註解的 SQL，才能使用完整帳戶管理功能。\n\n（新增資產時仍可直接輸入新帳戶名稱，不影響資產紀錄）');
-    return;
-  }
-  document.getElementById('account-edit-id').value=id;
-  document.getElementById('account-modal-title').textContent=id?'✏️ 編輯帳戶':'🏦 新增帳戶';
-  const a=accounts.find(x=>String(x.id)===String(id));
-  document.getElementById('account-name').value=a?.name||'';
-  document.getElementById('account-type').value=a?.type||'broker';
-  openModal('account-modal');
-}
-function closeAccountModal(){closeModal('account-modal');}
-
-async function saveAccount(e){
-  e.preventDefault(); if(!currentUser)return;
-  const id=document.getElementById('account-edit-id').value;
-  const name=document.getElementById('account-name').value.trim();
-  const type=document.getElementById('account-type').value;
-  if(!name)return;
-  const duplicate=accounts.find(a=>a.name.toLowerCase()===name.toLowerCase() && String(a.id)!==String(id));
-  if(duplicate)return alert('這個帳戶名稱已存在。');
-  const payload={user_id:currentUser.id,name,type,sort_order:accounts.length};
-  const q=id
-    ? supabaseClient.from('accounts').update({name,type}).eq('id',id).eq('user_id',currentUser.id)
-    : supabaseClient.from('accounts').insert([payload]);
-  const {error}=await q;
-  if(error)return alert('儲存帳戶失敗：'+error.message);
-  closeAccountModal(); await loadAccounts(); buildEffectiveAccountNames(); populateAccountSelects(); renderAccounts(); renderAssets();
-}
-
-async function deleteAccount(id){
-  const a=accounts.find(x=>String(x.id)===String(id)); if(!a)return;
-  const used=loadedAssets.some(x=>(x.account||'預設帳戶')===a.name);
-  if(used)return alert('這個帳戶仍有資產，請先把資產移到其他帳戶再刪除。');
-  if(!confirm(`確定刪除「${a.name}」？`))return;
-  const {error}=await supabaseClient.from('accounts').delete().eq('id',id).eq('user_id',currentUser.id);
-  if(error)return alert('刪除失敗：'+error.message);
-  await loadAccounts(); buildEffectiveAccountNames(); populateAccountSelects(); renderAccounts();
-}
-
-function renderAccounts(){
-  const c=document.getElementById('accounts-grid');
-  const names = effectiveAccountNames.length ? effectiveAccountNames : [];
-  if(!names.length){c.innerHTML='<div class="card p-8 text-center text-slate-500 md:col-span-2 xl:col-span-3">尚無帳戶，按右上角「新增帳戶」建立第一個帳戶。</div>';return;}
-  c.innerHTML=names.map(name=>{
-    const acc=accounts.find(a=>a.name===name);
-    const total=assetValues.filter(x=>x.account===name).reduce((s,x)=>s+x.twd,0);
-    const isReal = !!acc;
-    const typeLabel = acc ? (accountTypeMap[acc.type]||'其他') : (accountsTableExists ? '未建檔（來自資產紀錄）' : '尚未啟用帳戶表');
-    const actions = isReal
-      ? `<button class="btn bg-slate-800" onclick="openAccountModal('${acc.id}')">編輯</button><button class="btn bg-red-950/60 text-red-300" onclick="deleteAccount('${acc.id}')">刪除</button>`
-      : (accountsTableExists ? `<button class="btn bg-emerald-950/60 text-emerald-300" onclick="promoteAccount('${esc(name)}')">建檔</button>` : '');
-    return `<div class="card p-5">
-      <div class="flex justify-between gap-3"><div><div class="text-lg font-bold">${esc(name)}</div><div class="text-xs text-slate-500 mt-1">${esc(typeLabel)}</div></div><div class="flex gap-1">${actions}</div></div>
-      <div class="text-2xl font-black text-emerald-400 mt-5">${money(total)}</div>
-      <button class="mt-3 text-xs text-blue-400 hover:text-blue-300" onclick="filterByAccount('${esc(name)}')">查看此帳戶資產 →</button>
-    </div>`;
-  }).join('');
-}
-
-// 把一個「只存在於資產紀錄裡」的帳戶名稱正式建檔到 accounts 表
-async function promoteAccount(name){
-  if(!currentUser || !accountsTableExists) return;
-  const {error}=await supabaseClient.from('accounts').insert([{user_id:currentUser.id,name,type:'other',sort_order:accounts.length}]);
-  if(error)return alert('建檔失敗：'+error.message);
-  await loadAccounts(); buildEffectiveAccountNames(); populateAccountSelects(); renderAccounts();
-}
-
-// ---- 股價抓取（三層備援，來自 V1，比單一來源穩定）----
-async function fetchStockPrice(symbol){
-  if(!symbol)return null;
-  const clean=symbol.trim().toUpperCase().replace('.TW','');
-
-  // 1. 台股：FinMind
-  if(/^\d+$/.test(clean)){
-    try{
-      const url=`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${clean}&start_date=${recentDate()}`;
-      const r=await fetch(url); const d=await r.json();
-      if(d?.data?.length) return Number(d.data[d.data.length-1].close);
-    }catch(e){}
-  }
-
-  // 2. 美股/日股：Stooq
-  let stooqTicker = clean.toLowerCase() + '.us';
-  if (clean.endsWith('.T') || clean.endsWith('.JP')) stooqTicker = clean.split('.')[0].toLowerCase() + '.jp';
-  try{
-    const r=await fetch(`https://stooq.com/q/l/?s=${stooqTicker}&f=sdal12c&h&e=json`);
-    const d=await r.json();
-    const p=d?.symbols?.[0]?.close;
-    if(p && !isNaN(p) && p>0) return Number(p);
-  }catch(e){}
-
-  // 3. 備援：Yahoo Finance（透過 corsproxy）
-  try{
-    const target=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(clean)}?interval=1d`;
-    const r=await fetch(`https://corsproxy.io/?${encodeURIComponent(target)}`);
-    const d=await r.json();
-    const p=d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-    if(p && !isNaN(p) && p>0) return Number(p);
-  }catch(e){}
-
-  return null;
-}
-function recentDate(){const d=new Date();d.setDate(d.getDate()-10);return d.toISOString().slice(0,10);}
-
-// ---- 資產 ----
-async function loadAssets(){
-  if(!currentUser)return;
-  const {data,error}=await supabaseClient.from('assets').select('*').order('created_at',{ascending:false});
-  if(error){console.error(error);document.getElementById('asset-table-body').innerHTML=`<tr><td colspan="7" class="p-6 text-center text-red-400">資產載入失敗：${esc(error.message)}</td></tr>`;return;}
-  loadedAssets=data||[];
-  assetValues=[];
-  for(const a of loadedAssets){
-    let currency = a.currency || ((a.symbol && /^[A-Za-z]+$/.test(a.symbol)) ? 'USD' : 'TWD');
-    let price=Number(a.current_price)||1, live=false;
-    if((a.type==='stock'||a.type==='fund') && a.symbol){
-      const p=await fetchStockPrice(a.symbol); if(p!==null){price=p;live=true;}
-    }
-    if(a.type==='cash')price=1;
-    let rate=1;
-    if(currency==='USD') rate=currentUsdRate;
-    else if(currency==='JPY') rate=currentJpyRate;
-    const twd=Number(a.quantity||0)*price*rate;
-    assetValues.push({...a, price, currency, twd, live, account:a.account||'預設帳戶'});
-  }
-  renderAssets(); renderDashboard(); renderAccounts(); populateTxAssetSelectOptions();
-}
-
-function renderAssets(){
-  const search=(document.getElementById('asset-search')?.value||'').trim().toLowerCase();
-  const acc=document.getElementById('asset-filter-account')?.value||'all';
-  const cat=document.getElementById('asset-filter-category')?.value||'all';
-  const sort=document.getElementById('asset-sort')?.value||'value_desc';
-  let rows=assetValues.filter(a=>{
-    const hay=[a.name,a.symbol,a.account,a.currency,typeMap[a.type]].join(' ').toLowerCase();
-    return (!search||hay.includes(search))&&(acc==='all'||a.account===acc)&&(cat==='all'||a.type===cat);
-  });
-  rows.sort((a,b)=>{
-    if(sort==='value_asc')return a.twd-b.twd;
-    if(sort==='name')return String(a.name).localeCompare(String(b.name),'zh-Hant');
-    if(sort==='account')return String(a.account).localeCompare(String(b.account),'zh-Hant');
-    return b.twd-a.twd;
-  });
-  document.getElementById('asset-count').textContent=`顯示 ${rows.length} / ${assetValues.length} 筆`;
-  const view=document.getElementById('asset-view').value;
-  const body=document.getElementById('asset-table-body');
-  if(!rows.length){body.innerHTML='<tr><td colspan="7" class="p-8 text-center text-slate-500">找不到符合條件的資產。</td></tr>';return;}
-  if(view==='flat'){body.innerHTML=rows.map(assetRow).join('');return;}
-  const groups={};
-  rows.forEach(a=>{const key=view==='account'?a.account:view==='category'?(typeMap[a.type]||a.type):a.currency;(groups[key]??=[]).push(a);});
-  body.innerHTML=Object.entries(groups).map(([key,list])=>{
-    const subtotal=list.reduce((s,a)=>s+a.twd,0);
-    return `<tr><td colspan="7" class="p-3 bg-slate-950 border-t border-slate-700"><div class="flex justify-between"><span class="font-bold text-emerald-300">▼ ${esc(key)}</span><span class="text-xs text-slate-500">${money(subtotal)}</span></div></td></tr>${list.map(assetRow).join('')}`;
-  }).join('');
-}
-function assetRow(a){
-  return `<tr class="border-t border-slate-800 hover:bg-slate-800/50">
-    <td class="p-3"><div class="font-semibold">${esc(a.name)}</div><div class="text-[11px] text-slate-500">${esc(a.symbol||'-')}</div></td>
-    <td class="p-3"><span class="chip">${esc(typeMap[a.type]||a.type)}</span></td>
-    <td class="p-3">${esc(a.account)}</td>
-    <td class="p-3 text-right">${Number(a.quantity).toLocaleString(undefined,{maximumFractionDigits:6})}</td>
-    <td class="p-3 text-right ${a.live?'text-emerald-300':'text-slate-300'}">${a.currency} ${Number(a.price).toFixed(2)} ${a.live?'<span class="text-[9px]">即時</span>':''}</td>
-    <td class="p-3 text-right font-bold text-emerald-400">${money(a.twd)}</td>
-    <td class="p-3 text-center whitespace-nowrap">
-      <button class="text-emerald-400 text-xs mr-2" onclick="openAdjustModal('${a.id}','${esc(a.name).replace(/'/g,"\\'")}',${a.quantity})">增減</button>
-      <button class="text-blue-400 text-xs mr-2" onclick="openAssetModal('${a.id}')">編輯</button>
-      <button class="text-red-400 text-xs" onclick="deleteAsset('${a.id}')">刪除</button>
-    </td>
-  </tr>`;
-}
-
-function filterByAccount(name){
-  switchTab('assets');
-  document.getElementById('asset-filter-account').value=name;
-  renderAssets();
-}
-
-function renderDashboard(){
-  const total=assetValues.reduce((s,a)=>s+a.twd,0);
-  const stock=assetValues.filter(a=>a.type==='stock'||a.type==='fund').reduce((s,a)=>s+a.twd,0);
-  const cash=assetValues.filter(a=>a.type==='cash').reduce((s,a)=>s+a.twd,0);
-  const other=total-stock-cash;
-  document.getElementById('total-assets').textContent=money(total);
-  document.getElementById('stat-stock').textContent=money(stock);
-  document.getElementById('stat-cash').textContent=money(cash);
-  document.getElementById('stat-other').textContent=money(other);
-  const byCat={}; assetValues.forEach(a=>byCat[typeMap[a.type]||a.type]=(byCat[typeMap[a.type]||a.type]||0)+a.twd);
-  if(allocationChart)allocationChart.destroy();
-  allocationChart=new Chart(document.getElementById('allocation-chart'),{
-    type:'doughnut',
-    data:{labels:Object.keys(byCat),datasets:[{data:Object.values(byCat),borderWidth:1}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#cbd5e1'}}}}
-  });
-  const byAcc={}; assetValues.forEach(a=>byAcc[a.account]=(byAcc[a.account]||0)+a.twd);
-  document.getElementById('dashboard-account-list').innerHTML=Object.entries(byAcc).sort((a,b)=>b[1]-a[1]).map(([k,v])=>{
-    const pct=total?v/total*100:0;return `<button onclick="filterByAccount('${esc(k)}')" class="w-full text-left"><div class="flex justify-between text-xs"><span>${esc(k)}</span><span>${money(v)}</span></div><div class="h-1.5 bg-slate-800 rounded-full mt-1"><div class="h-1.5 bg-emerald-500 rounded-full" style="width:${pct}%"></div></div></button>`;
-  }).join('')||'<div class="text-sm text-slate-500">尚無資產</div>';
-  document.getElementById('recent-assets').innerHTML=assetValues.slice(0,4).map(a=>`<div class="bg-slate-950 rounded-xl p-4 border border-slate-800"><div class="font-semibold">${esc(a.name)}</div><div class="text-xs text-slate-500 mt-1">${esc(a.account)} · ${esc(typeMap[a.type])}</div><div class="font-bold text-emerald-400 mt-3">${money(a.twd)}</div></div>`).join('')||'<div class="text-slate-500 text-sm">尚無資產</div>';
-}
-
-function openAssetModal(id=''){
-  document.getElementById('asset-edit-id').value=id;
-  document.getElementById('asset-modal-title').textContent=id?'✏️ 編輯資產':'➕ 新增資產';
-  const a=assetValues.find(x=>String(x.id)===String(id));
-  document.getElementById('new-asset-type').value=a?.type||'stock';
-  document.getElementById('new-asset-symbol').value=a?.symbol||'';
-  document.getElementById('new-asset-name').value=a?.name||'';
-  populateAccountSelects();
-  document.getElementById('new-asset-account').value=a?.account||effectiveAccountNames[0]||'預設帳戶';
-  document.getElementById('new-asset-account-custom').value='';
-  document.getElementById('new-asset-account-custom').classList.add('hidden');
-  document.getElementById('new-asset-qty').value=a?.quantity??'';
-  document.getElementById('new-asset-price').value=a?.current_price??1;
-  document.getElementById('new-asset-currency').value=a?.currency||'TWD';
-  document.getElementById('new-asset-remark').value=a?.remark||'';
-  toggleSymbolInput(document.getElementById('new-asset-type').value);
-  openModal('asset-modal');
-}
-function closeAssetModal(){closeModal('asset-modal');}
-function toggleSymbolInput(type){
-  const hide=type==='cash';
-  document.getElementById('symbol-container').classList.toggle('hidden',hide);
-  document.getElementById('price-container').classList.toggle('hidden',hide);
-  document.getElementById('qty-label').textContent=hide?'金額':'數量 / 股數';
-  if(hide){document.getElementById('new-asset-symbol').value='';document.getElementById('new-asset-price').value=1;}
-}
-function handleSymbolInput(v){
-  const s=v.trim().toUpperCase();
-  if(knownStockNames[s])document.getElementById('new-asset-name').value=knownStockNames[s];
-  else if(s)document.getElementById('new-asset-name').value=s;
-  if(s.endsWith('.T')||s.endsWith('.JP')) document.getElementById('new-asset-currency').value='JPY';
-  else if(/^[A-Z]+$/.test(s)) document.getElementById('new-asset-currency').value='USD';
-  else if(/^\d+$/.test(s)) document.getElementById('new-asset-currency').value='TWD';
-}
-
-async function handleAddAsset(e){
-  e.preventDefault(); if(!currentUser)return alert('請先登入。');
-  const id=document.getElementById('asset-edit-id').value;
-  const type=document.getElementById('new-asset-type').value;
-  const symbol=document.getElementById('new-asset-symbol').value.trim().toUpperCase();
-  const name=document.getElementById('new-asset-name').value.trim();
-
-  let accountSel=document.getElementById('new-asset-account').value;
-  let account=accountSel;
-  if(accountSel==='__NEW__'){
-    account=document.getElementById('new-asset-account-custom').value.trim();
-    if(!account) return alert('請輸入新帳戶名稱！');
-    if(accountsTableExists){
-      const dup=accounts.find(a=>a.name.toLowerCase()===account.toLowerCase());
-      if(!dup){
-        const {error:accErr}=await supabaseClient.from('accounts').insert([{user_id:currentUser.id,name:account,type:'other',sort_order:accounts.length}]);
-        if(accErr) console.warn('自動建立帳戶失敗（不影響資產儲存）：',accErr.message);
+      if (currentUser) {
+        authCard.classList.add('hidden');
+        mainApp.classList.remove('hidden');
+        authStatusHeader.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-slate-300">👤 ${currentUser.email}</span>
+            <button onclick="logout()" class="bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-700 px-3 py-1.5 rounded-xl text-xs font-medium transition">登出</button>
+          </div>
+        `;
+        loadAccounts();
+        loadAssets();
+        loadTransactions();
+      } else {
+        authCard.classList.remove('hidden');
+        mainApp.classList.add('hidden');
+        authStatusHeader.innerHTML = '';
       }
     }
-  }
 
-  const quantity=Number(document.getElementById('new-asset-qty').value);
-  const current_price=type==='cash'?1:(Number(document.getElementById('new-asset-price').value)||1);
-  const currency=document.getElementById('new-asset-currency').value;
-  const remark=document.getElementById('new-asset-remark').value.trim();
-  if(!name||!Number.isFinite(quantity))return alert('請完整填寫資產名稱與數量。');
-  const payload={name,type,symbol:type==='cash'?'':symbol,account,quantity,current_price,currency,remark,user_id:currentUser.id};
-  let result;
-  if(id) result=await supabaseClient.from('assets').update(payload).eq('id',id).eq('user_id',currentUser.id);
-  else {
-    const existing=loadedAssets.find(a=>(a.account||'預設帳戶')===account && (type==='cash'?a.type==='cash'&&a.currency===currency:(a.symbol||'').toUpperCase()===symbol&&a.type===type));
-    if(existing){
-      result=await supabaseClient.from('assets').update({quantity:Number(existing.quantity)+quantity,current_price,currency,remark}).eq('id',existing.id).eq('user_id',currentUser.id);
-    } else result=await supabaseClient.from('assets').insert([payload]);
-  }
-  if(result.error)return alert('儲存資產失敗：'+result.error.message);
-  closeAssetModal();
-  await loadAccounts(); await loadAssets(); buildEffectiveAccountNames(); populateAccountSelects(); renderDashboard(); renderAccounts();
-}
+    async function handleAuth(e) {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
 
-async function deleteAsset(id){
-  if(!confirm('確定要刪除這筆資產嗎？'))return;
-  const {error}=await supabaseClient.from('assets').delete().eq('id',id).eq('user_id',currentUser.id);
-  if(error)return alert('刪除失敗：'+error.message);
-  await loadAssets(); renderDashboard(); renderAccounts();
-}
-
-// ---- 增減調整（來自 V1）----
-function openAdjustModal(id,name,qty){
-  document.getElementById('adjust-asset-id').value=id;
-  document.getElementById('adjust-title').textContent=`⚙️ 調整：${name}`;
-  document.getElementById('adjust-amount').value='';
-  openModal('adjust-modal');
-}
-function closeAdjustModal(){closeModal('adjust-modal');}
-async function handleAdjustSubmit(e){
-  e.preventDefault();
-  const id=document.getElementById('adjust-asset-id').value;
-  const mode=document.getElementById('adjust-mode').value;
-  const amount=Number(document.getElementById('adjust-amount').value);
-  if(!Number.isFinite(amount)||amount<=0) return alert('請輸入有效的調整金額/數量！');
-  const asset=loadedAssets.find(a=>String(a.id)===String(id));
-  if(!asset) return alert('找不到目標資產');
-  let newQty=Number(asset.quantity);
-  if(mode==='add') newQty+=amount;
-  else if(mode==='sub') newQty=Math.max(0,newQty-amount);
-  else newQty=amount;
-  const {error}=await supabaseClient.from('assets').update({quantity:newQty}).eq('id',id).eq('user_id',currentUser.id);
-  if(error) return alert('更新失敗：'+error.message);
-  closeAdjustModal(); await loadAssets(); renderDashboard(); renderAccounts();
-}
-
-// ---- 收支：連動更新現金帳戶（來自 V1，V2 版本遺漏的核心功能）----
-function populateTxAssetSelectOptions(){
-  const select=document.getElementById('tx-target-asset-id');
-  const cashAssets=(loadedAssets||[]).filter(a=>a.type==='cash');
-  if(!cashAssets.length){
-    select.innerHTML=`<option value="">-- 無可用現金帳戶（請先在「資產」新增現金資產）--</option>`;
-    return;
-  }
-  let html=`<option value="">-- 不連動變更帳戶（僅純紀錄收支）--</option>`;
-  cashAssets.forEach(a=>{
-    const acc=a.account||'預設帳戶';
-    html+=`<option value="${a.id}">🏦 [${esc(acc)}] ${esc(a.name)}（${a.currency||'TWD'} 餘額：${Number(a.quantity).toLocaleString()}）</option>`;
-  });
-  select.innerHTML=html;
-}
-function updateTxLinkHint(txType){
-  const label=document.getElementById('tx-asset-link-label');
-  const hint=document.getElementById('tx-asset-link-hint');
-  if(txType==='income'){ label.textContent='🏦 連動加算銀行/現金帳戶（選填）：'; hint.textContent='選擇現金帳戶後，此筆收入將自動【加總】進該帳戶餘額中。'; }
-  else if(txType==='expense'){ label.textContent='🏦 連動扣除銀行/現金帳戶（選填）：'; hint.textContent='選擇現金帳戶後，此筆支出將自動從該帳戶餘額【扣除】。'; }
-  else { label.textContent='🏦 變現轉入銀行/現金帳戶（選填）：'; hint.textContent='選擇現金帳戶後，變現賣出的資金會自動【加算】進入該帳戶中。'; }
-}
-
-async function loadTransactions(){
-  if(!currentUser)return;
-  const {data,error}=await supabaseClient.from('transactions').select('*').order('created_at',{ascending:false});
-  if(error){document.getElementById('tx-list').innerHTML=`<div class="text-red-400 text-xs">載入失敗：${esc(error.message)}</div>`;return;}
-  rawTransactions=data||[]; updateMonthFilterOptions(); renderTransactions();
-}
-function updateMonthFilterOptions(){
-  const s=document.getElementById('tx-month-filter'), old=s.value, months=[...new Set(rawTransactions.map(t=>{const d=new Date(t.created_at);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}))].sort().reverse();
-  s.innerHTML='<option value="all">全部紀錄</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
-  if([...s.options].some(o=>o.value===old))s.value=old;
-}
-function renderTransactions(){
-  const selected=document.getElementById('tx-month-filter').value;
-  const list=selected==='all'?rawTransactions:rawTransactions.filter(t=>{const d=new Date(t.created_at);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`===selected;});
-  let inc=0,exp=0; list.forEach(t=>{ if(t.type==='income'||t.type==='realize') inc+=Number(t.amount)||0; else if(t.type==='expense') exp+=Number(t.amount)||0; });
-  document.getElementById('sum-income').textContent=money(inc);document.getElementById('sum-expense').textContent=money(exp);document.getElementById('sum-net').textContent=money(inc-exp);
-  const badges={income:['收入','text-emerald-300 bg-emerald-950'],expense:['支出','text-rose-300 bg-rose-950'],realize:['變現','text-blue-300 bg-blue-950']};
-  document.getElementById('tx-list').innerHTML=list.length?list.map(t=>{const b=badges[t.type]||[t.type,'text-slate-300 bg-slate-800'];return `<div class="flex justify-between items-center gap-3 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs"><div class="flex items-center gap-3"><span class="px-2 py-1 rounded ${b[1]}">${b[0]}</span><div><div class="font-semibold">${esc(t.category)}</div><div class="text-slate-600 mt-1">${new Date(t.created_at).toLocaleDateString('zh-TW')}</div></div></div><div class="flex items-center gap-3"><b>${money(t.amount)}</b><button onclick="deleteTransaction('${t.id}')" class="text-slate-500 hover:text-red-400">✕</button></div></div>`}).join(''):'<div class="text-center text-slate-500 p-8 text-sm">尚無紀錄</div>';
-}
-async function handleTransaction(e){
-  e.preventDefault(); if(!currentUser)return;
-  const type=document.getElementById('tx-type').value;
-  const category=document.getElementById('tx-category').value.trim();
-  const amount=Number(document.getElementById('tx-amount').value);
-  const date=document.getElementById('tx-date').value;
-  const targetAssetId=document.getElementById('tx-target-asset-id').value;
-  const created_at=date?new Date(date+'T00:00:00').toISOString():new Date().toISOString();
-
-  const {error:txErr}=await supabaseClient.from('transactions').insert([{user_id:currentUser.id,type,category,amount,created_at}]);
-  if(txErr)return alert('紀錄失敗：'+txErr.message);
-
-  if(targetAssetId){
-    const targetAsset=loadedAssets.find(a=>String(a.id)===String(targetAssetId));
-    if(targetAsset){
-      let currentQty=Number(targetAsset.quantity);
-      if(type==='income'||type==='realize') currentQty+=amount;
-      else if(type==='expense') currentQty=Math.max(0,currentQty-amount);
-      const {error:assetErr}=await supabaseClient.from('assets').update({quantity:currentQty}).eq('id',targetAssetId).eq('user_id',currentUser.id);
-      if(assetErr) alert('收支已紀錄，但連動更新帳戶餘額失敗：'+assetErr.message);
-      else alert(`已成功紀錄收支，並將「${targetAsset.name}」餘額更新為：${currentQty.toLocaleString()}`);
+      if (authMode === 'signup') {
+        const { data, error } = await supabaseClient.auth.signUp({ email, password });
+        if (error) alert('註冊失敗：' + error.message);
+        else {
+          alert('註冊成功！');
+          currentUser = data.user;
+          updateUI();
+        }
+      } else {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) alert('登入失敗：' + error.message);
+        else {
+          currentUser = data.user;
+          updateUI();
+        }
+      }
     }
-  }
 
-  document.getElementById('tx-category').value='';
-  document.getElementById('tx-amount').value='';
-  await loadTransactions();
-  await loadAssets();
-  renderDashboard(); renderAccounts();
-}
-async function deleteTransaction(id){
-  if(!confirm('確定刪除這筆紀錄？'))return;
-  const {error}=await supabaseClient.from('transactions').delete().eq('id',id).eq('user_id',currentUser.id);
-  if(error)return alert('刪除失敗：'+error.message); await loadTransactions();
-}
+    async function handleResetPassword() {
+      const email = document.getElementById('auth-email').value.trim();
+      if (!email) return alert('請先在上方「電子郵件」欄位填入 Email！');
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+      if (error) alert('發送失敗：' + error.message);
+      else alert('重設密碼郵件已發送！請至 Email 信箱收信。');
+    }
 
-// ---- CSV 匯出（來自 V1）----
-function downloadCSV(csvContent, fileName){
-  const blob=new Blob(["\uFEFF"+csvContent],{type:'text/csv;charset=utf-8;'});
-  const link=document.createElement('a');
-  const url=URL.createObjectURL(blob);
-  link.setAttribute('href',url);
-  link.setAttribute('download',fileName);
-  document.body.appendChild(link); link.click(); document.body.removeChild(link);
-}
-function exportAssetsCSV(){
-  if(!assetValues.length) return alert('目前沒有資產資料可供匯出');
-  let csv="資產名稱,股票代碼,類別,存放帳戶,數量,計價幣別,最新單價,折算台幣估值\n";
-  assetValues.forEach(a=>{
-    csv+=`"${a.name}","${a.symbol||''}","${typeMap[a.type]||a.type}","${a.account}",${a.quantity},"${a.currency}",${a.price},${Math.round(a.twd)}\n`;
-  });
-  downloadCSV(csv, `個人資產清單_${new Date().toISOString().slice(0,10)}.csv`);
-}
-function exportTransactionsCSV(){
-  if(!rawTransactions.length) return alert('目前沒有收支紀錄可供匯出');
-  const selected=document.getElementById('tx-month-filter').value;
-  const list=selected==='all'?rawTransactions:rawTransactions.filter(t=>{const d=new Date(t.created_at);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`===selected;});
-  if(!list.length) return alert('選取範圍內無收支紀錄');
-  const typeNameMap={income:'收入',expense:'支出',realize:'資產變現'};
-  let csv="日期,類型,說明/分類,金額(TWD)\n";
-  list.forEach(t=>{
-    const d=t.created_at?new Date(t.created_at).toLocaleDateString():'';
-    csv+=`"${d}","${typeNameMap[t.type]||t.type}","${t.category}",${t.amount}\n`;
-  });
-  downloadCSV(csv, `收支紀錄_${selected}.csv`);
-}
+    async function logout() {
+      await supabaseClient.auth.signOut();
+      currentUser = null;
+      updateUI();
+    }
 
-function switchTab(tab){
-  document.querySelectorAll('[id^="tab-"]').forEach(e=>e.classList.add('hidden'));
-  document.getElementById('tab-'+tab).classList.remove('hidden');
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  document.querySelector(`.tab[data-tab="${tab}"]`)?.classList.add('active');
-}
-window.onload=init;
-</script>
+    async function fetchRates() {
+      try {
+        const res = await fetch('https://open.er-api.com/v6/latest/USD');
+        const data = await res.json();
+        currentUsdRate = parseFloat(data.rates.TWD.toFixed(2));
+        const usdToJpy = data.rates.JPY;
+        currentJpyRate = parseFloat((data.rates.TWD / usdToJpy).toFixed(4));
 
-<!--
-====================================================================
-若要啟用完整的「帳戶管理」功能（新增/編輯/刪除帳戶），
-請到 Supabase → SQL Editor 執行以下語法（只需執行一次）：
-====================================================================
+        document.getElementById('usd-rate').innerText = 'NT$ ' + currentUsdRate;
+        document.getElementById('jpy-rate').innerText = 'NT$ ' + currentJpyRate;
+      } catch (e) {
+        document.getElementById('usd-rate').innerText = 'NT$ 32.21 (預設)';
+        document.getElementById('jpy-rate').innerText = 'NT$ 0.215 (預設)';
+      }
+    }
 
-create table if not exists public.accounts (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  name text not null,
-  type text not null default 'other',
-  sort_order int not null default 0,
-  created_at timestamptz not null default now()
-);
+    function handleSymbolInput(symbol) {
+      const clean = symbol.trim().toUpperCase();
+      const nameInput = document.getElementById('new-asset-name');
+      const currSelect = document.getElementById('new-asset-currency');
 
-alter table public.accounts enable row level security;
+      if (knownStockNames[clean]) {
+        nameInput.value = knownStockNames[clean];
+      } else if (clean.length > 0) {
+        nameInput.value = clean;
+      }
 
-create policy "Users can manage their own accounts"
-on public.accounts
-for all
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+      if (clean.endsWith('.T') || clean.endsWith('.JP')) currSelect.value = 'JPY';
+      else if (/^[A-Z]+$/.test(clean)) currSelect.value = 'USD';
+      else if (/^\d+$/.test(clean)) currSelect.value = 'TWD';
+    }
 
--- 沒有這張表也完全沒關係：本頁面會自動用 assets 資料表裡
--- 既有的 account 欄位（自由文字）做為帳戶清單的 fallback，
--- 你原本的資產資料不會因此消失或不可見。
-====================================================================
--->
+    // 🌐 全市場 (台/美/日) 穩定抓價邏輯
+    async function fetchStockPrice(symbol) {
+      if (!symbol) return null;
+      let cleanSymbol = symbol.trim().toUpperCase().replace('.TW', '');
+
+      // 1. 台股抓價 (FinMind API)
+      if (/^\d+$/.test(cleanSymbol)) {
+        try {
+          const finmindUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${cleanSymbol}&start_date=${getRecentDateStr()}`;
+          const res = await fetch(finmindUrl);
+          const data = await res.json();
+          if (data && data.data && data.data.length > 0) {
+            return parseFloat(data.data[data.data.length - 1].close);
+          }
+        } catch (e) {}
+      }
+
+      // 2. 美股與日股抓價 (Stooq API)
+      let stooqTicker = cleanSymbol.toLowerCase() + '.us';
+      if (cleanSymbol.endsWith('.T') || cleanSymbol.endsWith('.JP')) {
+        stooqTicker = cleanSymbol.split('.')[0].toLowerCase() + '.jp';
+      }
+
+      try {
+        const stooqUrl = `https://stooq.com/q/l/?s=${stooqTicker}&f=sdal12c&h&e=json`;
+        const res = await fetch(stooqUrl);
+        const data = await res.json();
+        const price = data?.symbols?.[0]?.close;
+        if (price && !isNaN(price) && price > 0) {
+          return parseFloat(price);
+        }
+      } catch (e) {}
+
+      // 3. 備援抓價 (Yahoo Finance via AllOrigins)
+      try {
+        const backupUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}`;
+        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(backupUrl)}`);
+        const data = await res.json();
+        const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+        if (price && !isNaN(price) && price > 0) {
+          return parseFloat(price);
+        }
+      } catch (e) {}
+
+      return null;
+    }
+
+    function getRecentDateStr() {
+      const d = new Date();
+      d.setDate(d.getDate() - 10);
+      return d.toISOString().split('T')[0];
+    }
+
+    async function loadAccounts() {
+      if (!currentUser) return;
+      const { data, error } = await supabaseClient.from('accounts').select('*').order('created_at', { ascending: true });
+      if (error) {
+        hasAccountsTable = false;
+        document.getElementById('accounts-table-warning').classList.remove('hidden');
+        renderAccountGrid();
+        return;
+      }
+
+      hasAccountsTable = true;
+      document.getElementById('accounts-table-warning').classList.add('hidden');
+      dbAccounts = data || [];
+      
+      dbAccounts.forEach(acc => {
+        if (!userAccountsList.includes(acc.name)) userAccountsList.push(acc.name);
+      });
+
+      renderAccountGrid();
+      populateFilterAccountOptions();
+    }
+
+    function renderAccountGrid() {
+      const container = document.getElementById('accounts-grid-container');
+      if (!hasAccountsTable) {
+        let html = '';
+        userAccountsList.forEach(accName => {
+          html += `
+            <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-2">
+              <div class="text-base font-bold text-slate-100">🏦 ${accName}</div>
+              <div class="text-xs text-slate-400">目前資產紀錄關聯帳戶</div>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
+        return;
+      }
+
+      if (!dbAccounts || dbAccounts.length === 0) {
+        container.innerHTML = `<div class="text-slate-500 text-sm col-span-full border border-slate-800 rounded-xl p-6 text-center">尚無獨立帳戶資料，點擊右上角「+ 新增帳戶」新增</div>`;
+        return;
+      }
+
+      container.innerHTML = dbAccounts.map(acc => `
+        <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-3">
+          <div class="flex justify-between items-center">
+            <h3 class="font-bold text-base text-slate-100">🏦 ${acc.name}</h3>
+            <div class="flex gap-1.5">
+              <button onclick="openAccountModal('${acc.id}', '${acc.name}')" class="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 border border-emerald-800 px-2 py-1 rounded-md">編輯</button>
+              <button onclick="deleteAccount('${acc.id}')" class="text-xs text-red-400 hover:text-red-300 bg-red-950/60 border border-red-800 px-2 py-1 rounded-md">刪除</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function loadAssets() {
+      if (!currentUser) return;
+      const { data: assets, error } = await supabaseClient.from('assets').select('*');
+      if (error) return console.error('Fetch error:', error);
+
+      loadedAssets = assets || [];
+
+      loadedAssets.forEach(a => {
+        const acc = a.account || '預設帳戶';
+        if (!userAccountsList.includes(acc)) userAccountsList.push(acc);
+      });
+
+      populateTxAssetSelectOptions();
+      populateFilterAccountOptions();
+
+      if (!loadedAssets || loadedAssets.length === 0) {
+        document.getElementById('asset-display-container').innerHTML = `
+          <div class="text-center p-8 text-slate-500 border border-slate-700/50 rounded-xl">
+            目前尚無資產資料，點擊右上角「+ 新增資產」開始建立
+          </div>`;
+        document.getElementById('total-assets').innerText = 'NT$ 0';
+        document.getElementById('stat-stock').innerText = 'NT$ 0';
+        document.getElementById('stat-cash').innerText = 'NT$ 0';
+        renderAccountDistribution({}, 0);
+        renderAllocationChart({ '股票/ETF': 0, '現金/存款': 0, '其他': 0 });
+        return;
+      }
+
+      for (let a of loadedAssets) {
+        let activePrice = a.current_price || 1;
+        let isLivePrice = false;
+        let currency = a.currency || 'TWD';
+
+        if (a.type === 'stock' || a.type === 'fund') {
+          if (a.symbol) {
+            const livePrice = await fetchStockPrice(a.symbol);
+            if (livePrice !== null && livePrice > 0) {
+              activePrice = livePrice;
+              isLivePrice = true;
+            }
+          }
+        } else if (a.type === 'cash') {
+          activePrice = 1;
+        }
+
+        let rate = 1;
+        if (currency === 'USD') rate = currentUsdRate;
+        else if (currency === 'JPY') rate = currentJpyRate;
+
+        a._activePrice = activePrice;
+        a._isLivePrice = isLivePrice;
+        a._currency = currency;
+        a._twdVal = a.quantity * activePrice * rate;
+      }
+
+      let totalTwd = 0;
+      let stockTwd = 0;
+      let cashTwd = 0;
+      let otherTwd = 0;
+      let accountTotals = {};
+      let chartCategoryData = {};
+
+      loadedAssets.forEach(a => {
+        totalTwd += a._twdVal;
+        const accName = a.account || '預設帳戶';
+        accountTotals[accName] = (accountTotals[accName] || 0) + a._twdVal;
+
+        const catName = typeMap[a.type] || '其他';
+        chartCategoryData[catName] = (chartCategoryData[catName] || 0) + a._twdVal;
+
+        if (a.type === 'stock') stockTwd += a._twdVal;
+        else if (a.type === 'cash') cashTwd += a._twdVal;
+        else otherTwd += a._twdVal;
+      });
+
+      document.getElementById('total-assets').innerText = 'NT$ ' + Math.round(totalTwd).toLocaleString();
+      document.getElementById('stat-stock').innerText = 'NT$ ' + Math.round(stockTwd).toLocaleString();
+      document.getElementById('stat-cash').innerText = 'NT$ ' + Math.round(cashTwd).toLocaleString();
+
+      renderAccountDistribution(accountTotals, totalTwd);
+      renderAllocationChart(chartCategoryData);
+      renderAssetView();
+    }
+
+    function renderAllocationChart(chartData) {
+      const ctx = document.getElementById('allocation-chart');
+      if (!ctx) return;
+
+      const labels = Object.keys(chartData);
+      const dataValues = Object.values(chartData);
+
+      if (allocationChart) {
+        allocationChart.destroy();
+      }
+
+      allocationChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: dataValues,
+            backgroundColor: [
+              '#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#64748b'
+            ],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: '#cbd5e1', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+
+    function populateFilterAccountOptions() {
+      const select = document.getElementById('asset-filter-account');
+      if (!select) return;
+      let html = `<option value="all">全部帳戶</option>`;
+      userAccountsList.forEach(acc => {
+        html += `<option value="${acc}">${acc}</option>`;
+      });
+      select.innerHTML = html;
+    }
+
+    function populateTxAssetSelectOptions() {
+      const select = document.getElementById('tx-target-asset-id');
+      const cashAssets = (loadedAssets || []).filter(a => a.type === 'cash');
+
+      if (cashAssets.length === 0) {
+        select.innerHTML = `<option value="">-- 無可用銀行/現金帳戶 (請先至左側新增現金資產) --</option>`;
+        return;
+      }
+
+      let html = `<option value="">-- 不連動變更帳戶 (僅純紀錄收支) --</option>`;
+      cashAssets.forEach(a => {
+        const acc = a.account || '預設帳戶';
+        html += `<option value="${a.id}">🏦 [${acc}] ${a.name} (${a.currency || 'TWD'} 餘額: ${Number(a.quantity).toLocaleString()})</option>`;
+      });
+      select.innerHTML = html;
+    }
+
+    function updateTxLinkHint(txType) {
+      const label = document.getElementById('tx-asset-link-label');
+      const hint = document.getElementById('tx-asset-link-hint');
+
+      if (txType === 'income') {
+        label.innerText = '🏦 連動加算銀行/現金帳戶 (選填)：';
+        hint.innerText = '選擇銀行帳戶後，此筆收入將會自動【加總】進該帳戶存款中。';
+      } else if (txType === 'expense') {
+        label.innerText = '🏦 連動扣除銀行/現金帳戶 (選填)：';
+        hint.innerText = '選擇銀行帳戶後，此筆支出將會自動從該帳戶存款【扣除】。';
+      } else if (txType === 'realize') {
+        label.innerText = '🏦 變現轉入銀行/現金帳戶 (選填)：';
+        hint.innerText = '選擇銀行帳戶後，變現賣出的資金會自動【加算】進入該帳戶中。';
+      }
+    }
+
+    function renderAssetView() {
+      const searchKeyword = document.getElementById('asset-search').value.trim().toLowerCase();
+      const groupMode = document.getElementById('asset-group-mode').value;
+      const filterAccount = document.getElementById('asset-filter-account').value;
+      const filterType = document.getElementById('asset-filter-type').value;
+      const sortMode = document.getElementById('asset-sort-mode').value;
+      const container = document.getElementById('asset-display-container');
+
+      let filtered = loadedAssets.filter(a => {
+        const nameMatch = (a.name || '').toLowerCase().includes(searchKeyword);
+        const symbolMatch = (a.symbol || '').toLowerCase().includes(searchKeyword);
+        const accountMatch = (a.account || '預設帳戶').toLowerCase().includes(searchKeyword);
+        const typeMatch = (typeMap[a.type] || '').toLowerCase().includes(searchKeyword);
+        const currencyMatch = (a._currency || '').toLowerCase().includes(searchKeyword);
+
+        const passAccount = filterAccount === 'all' || (a.account || '預設帳戶') === filterAccount;
+        const passType = filterType === 'all' || a.type === filterType;
+
+        return (nameMatch || symbolMatch || accountMatch || typeMatch || currencyMatch) && passAccount && passType;
+      });
+
+      // 排序
+      filtered.sort((a, b) => {
+        if (sortMode === 'val_desc') return b._twdVal - a._twdVal;
+        if (sortMode === 'val_asc') return a._twdVal - b._twdVal;
+        if (sortMode === 'name_asc') return (a.name || '').localeCompare(b.name || '');
+        return 0;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center p-8 text-slate-500">查無符合條件的資產資料</div>`;
+        return;
+      }
+
+      if (groupMode === 'flat') {
+        let rows = filtered.map(a => renderAssetRow(a)).join('');
+        container.innerHTML = `
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="text-xs uppercase bg-slate-700/50 text-slate-400">
+              <tr>
+                <th class="p-3">名稱 / 代碼</th>
+                <th class="p-3">存放帳戶</th>
+                <th class="p-3">數量</th>
+                <th class="p-3">最新價格 / 幣別</th>
+                <th class="p-3">折算台幣</th>
+                <th class="p-3 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-700">${rows}</tbody>
+          </table>
+        `;
+      } else {
+        let groups = {};
+        filtered.forEach(a => {
+          let key = '其他';
+          if (groupMode === 'account') key = a.account || '預設帳戶';
+          else if (groupMode === 'type') key = typeMap[a.type] || '其他';
+          else if (groupMode === 'currency') key = `${a._currency || 'TWD'} 計價資產`;
+          else if (groupMode === 'symbol') key = a.symbol ? `${a.symbol} (${a.name})` : a.name;
+
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(a);
+        });
+
+        let html = '<div class="space-y-4">';
+        for (const [groupName, items] of Object.entries(groups)) {
+          const groupTotal = items.reduce((sum, item) => sum + item._twdVal, 0);
+          const itemRows = items.map(a => renderAssetRow(a)).join('');
+
+          html += `
+            <div class="bg-slate-900/40 border border-slate-700/70 rounded-xl overflow-hidden">
+              <div class="flex justify-between items-center bg-slate-700/40 px-4 py-2.5 font-bold text-slate-200">
+                <span>${groupName} (${items.length})</span>
+                <span class="text-emerald-400">小計: NT$ ${Math.round(groupTotal).toLocaleString()}</span>
+              </div>
+              <table class="w-full text-left text-sm text-slate-300">
+                <tbody class="divide-y divide-slate-700/60">${itemRows}</tbody>
+              </table>
+            </div>
+          `;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+      }
+    }
+
+    function renderAssetRow(a) {
+      const accName = a.account || '預設帳戶';
+      return `
+        <tr class="hover:bg-slate-700/30">
+          <td class="p-3 font-medium text-slate-100">${a.name} <span class="text-xs text-slate-400">(${a.symbol || '-'})</span></td>
+          <td class="p-3"><span class="bg-slate-700/60 border border-slate-600 text-slate-300 text-xs px-2 py-0.5 rounded-md">${accName}</span></td>
+          <td class="p-3 font-bold text-slate-100">${Number(a.quantity).toLocaleString()}</td>
+          <td class="p-3 font-medium ${a._isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
+            ${a._currency} ${Number(a._activePrice).toFixed(2)}
+            ${a._isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : (a.type === 'cash' ? '<span class="text-[10px] text-slate-400 ml-1">(現金)</span>' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>')}
+          </td>
+          <td class="p-3 font-semibold text-emerald-400">NT$ ${Math.round(a._twdVal).toLocaleString()}</td>
+          <td class="p-3 text-center flex justify-center gap-1.5">
+            <button onclick="openAdjustModal('${a.id}', '${a.name}', ${a.quantity})" class="text-emerald-400 hover:text-emerald-300 text-xs bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-800 px-2 py-1 rounded-lg transition">⚙️ 增減</button>
+            <button onclick="editAsset('${a.id}')" class="text-blue-400 hover:text-blue-300 text-xs bg-blue-950/60 hover:bg-blue-900/60 border border-blue-800 px-2 py-1 rounded-lg transition">編輯</button>
+            <button onclick="deleteAsset('${a.id}')" class="text-red-400 hover:text-red-300 text-xs bg-red-950/50 hover:bg-red-900/50 border border-red-800 px-2 py-1 rounded-lg transition">刪除</button>
+          </td>
+        </tr>
+      `;
+    }
+
+    function renderAccountDistribution(accountTotals, totalTwd) {
+      const container = document.getElementById('account-distribution');
+      if (!accountTotals || Object.keys(accountTotals).length === 0) {
+        container.innerHTML = `<div class="text-slate-500 text-xs col-span-full">尚無帳戶資料</div>`;
+        return;
+      }
+
+      let html = '';
+      for (const [acc, amt] of Object.entries(accountTotals)) {
+        const pct = totalTwd > 0 ? ((amt / totalTwd) * 100).toFixed(1) : 0;
+        html += `
+          <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 space-y-1">
+            <div class="text-xs text-slate-400 truncate">${acc}</div>
+            <div class="text-base font-bold text-slate-200">NT$ ${Math.round(amt).toLocaleString()}</div>
+            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div class="bg-emerald-500 h-1.5 rounded-full" style="width: ${pct}%"></div>
+            </div>
+            <div class="text-[10px] text-slate-500 text-right">${pct}%</div>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
+    }
+
+    function populateAccountOptions() {
+      const select = document.getElementById('new-asset-account-select');
+      let html = userAccountsList.map(acc => `<option value="${acc}">${acc}</option>`).join('');
+      html += `<option value="__NEW__">➕ 新增自訂帳戶...</option>`;
+      select.innerHTML = html;
+      document.getElementById('new-asset-account-custom').classList.add('hidden');
+    }
+
+    function handleAccountSelectChange(val) {
+      const customInput = document.getElementById('new-asset-account-custom');
+      if (val === '__NEW__') {
+        customInput.classList.remove('hidden');
+        customInput.focus();
+      } else {
+        customInput.classList.add('hidden');
+      }
+    }
+
+    function toggleSymbolInput(type) {
+      const symbolContainer = document.getElementById('symbol-container');
+      const priceContainer = document.getElementById('price-container');
+      const qtyLabel = document.getElementById('qty-label');
+
+      if (type === 'cash') {
+        symbolContainer.classList.add('hidden');
+        priceContainer.classList.add('hidden');
+        qtyLabel.innerText = '金額 / 數量';
+      } else {
+        symbolContainer.classList.remove('hidden');
+        priceContainer.classList.remove('hidden');
+        qtyLabel.innerText = '本次增加數量 / 股數';
+      }
+    }
+
+    function openAssetModal() {
+      document.getElementById('edit-asset-id').value = '';
+      document.getElementById('asset-modal-title').innerText = '➕ 新增 / 併入資產項目';
+      document.getElementById('new-asset-name').value = '';
+      document.getElementById('new-asset-symbol').value = '';
+      document.getElementById('new-asset-qty').value = '';
+      document.getElementById('new-asset-price').value = '1';
+      toggleAssetModal(true);
+    }
+
+    function editAsset(id) {
+      const a = loadedAssets.find(item => item.id === id);
+      if (!a) return;
+
+      document.getElementById('edit-asset-id').value = a.id;
+      document.getElementById('asset-modal-title').innerText = `✏️ 編輯資產: ${a.name}`;
+      document.getElementById('new-asset-type').value = a.type || 'stock';
+      document.getElementById('new-asset-symbol').value = a.symbol || '';
+      document.getElementById('new-asset-name').value = a.name || '';
+      document.getElementById('new-asset-qty').value = a.quantity;
+      document.getElementById('new-asset-price').value = a.current_price || 1;
+      document.getElementById('new-asset-currency').value = a.currency || 'TWD';
+
+      toggleAssetModal(true);
+      document.getElementById('new-asset-account-select').value = a.account || '預設帳戶';
+      toggleSymbolInput(a.type);
+    }
+
+    async function handleAddOrUpdateAsset(e) {
+      e.preventDefault();
+      if (!currentUser) return alert('請先登入！');
+
+      const editId = document.getElementById('edit-asset-id').value;
+      const type = document.getElementById('new-asset-type').value;
+      let symbol = document.getElementById('new-asset-symbol').value.trim().toUpperCase();
+      let name = document.getElementById('new-asset-name').value.trim();
+      const currency = document.getElementById('new-asset-currency').value;
+      
+      const accountSelect = document.getElementById('new-asset-account-select').value;
+      let account = accountSelect;
+      if (accountSelect === '__NEW__') {
+        account = document.getElementById('new-asset-account-custom').value.trim();
+        if (!account) return alert('請輸入新帳戶名稱！');
+        if (!userAccountsList.includes(account)) userAccountsList.push(account);
+      }
+
+      const quantity = parseFloat(document.getElementById('new-asset-qty').value);
+      let current_price = parseFloat(document.getElementById('new-asset-price').value) || 1;
+
+      if (type === 'cash') {
+        symbol = '';
+        current_price = 1;
+        if (!name) {
+          if (currency === 'USD') name = '美金存款';
+          else if (currency === 'JPY') name = '日圓存款';
+          else name = '台幣存款';
+        }
+      } else {
+        if (!name) name = symbol || '未命名資產';
+      }
+
+      if (editId) {
+        // 編輯模式：直接覆蓋更新
+        const { error } = await supabaseClient.from('assets').update({
+          name, symbol, type, quantity, current_price, currency, account
+        }).eq('id', editId);
+
+        if (error) alert('更新資產失敗: ' + error.message);
+        else {
+          toggleAssetModal(false);
+          loadAssets();
+        }
+      } else {
+        // 新增模式：檢查是否可自動併入同帳戶相同資產
+        const existingAsset = loadedAssets.find(a => {
+          const isSameAccount = (a.account || '預設帳戶') === account;
+          if (type === 'cash') {
+            return a.type === 'cash' && isSameAccount && a.currency === currency;
+          } else {
+            return a.type === type && isSameAccount && a.symbol === symbol;
+          }
+        });
+
+        if (existingAsset) {
+          const updatedQty = parseFloat(existingAsset.quantity) + quantity;
+          const { error } = await supabaseClient.from('assets')
+            .update({ quantity: updatedQty, current_price: current_price })
+            .eq('id', existingAsset.id);
+
+          if (error) alert('更新資產失敗: ' + error.message);
+          else {
+            alert(`已自動併入「${account}」帳戶中的 ${existingAsset.name}！數量更新為: ${updatedQty}`);
+            toggleAssetModal(false);
+            loadAssets();
+          }
+        } else {
+          const { error } = await supabaseClient.from('assets').insert([{
+            user_id: currentUser.id, name, symbol, type, quantity, current_price, currency, account
+          }]);
+
+          if (error) alert('新增資產失敗: ' + error.message);
+          else {
+            toggleAssetModal(false);
+            loadAssets();
+          }
+        }
+      }
+    }
+
+    function openAdjustModal(assetId, assetName, currentQty) {
+      document.getElementById('adjust-asset-id').value = assetId;
+      document.getElementById('adjust-title').innerText = `⚙️ 調整: ${assetName}`;
+      document.getElementById('adjust-amount').value = '';
+      toggleAdjustModal(true);
+    }
+
+    async function handleAdjustSubmit(e) {
+      e.preventDefault();
+      const assetId = document.getElementById('adjust-asset-id').value;
+      const mode = document.getElementById('adjust-mode').value;
+      const amount = parseFloat(document.getElementById('adjust-amount').value);
+
+      if (isNaN(amount) || amount <= 0) return alert('請輸入有效的調整金額/數量！');
+
+      const asset = loadedAssets.find(a => a.id === assetId);
+      if (!asset) return alert('找不到目標資產');
+
+      let newQty = parseFloat(asset.quantity);
+      if (mode === 'add') newQty += amount;
+      else if (mode === 'sub') newQty = Math.max(0, newQty - amount);
+      else if (mode === 'set') newQty = amount;
+
+      const { error } = await supabaseClient.from('assets').update({ quantity: newQty }).eq('id', assetId);
+      if (error) {
+        alert('更新失敗: ' + error.message);
+      } else {
+        toggleAdjustModal(false);
+        loadAssets();
+      }
+    }
+
+    async function deleteAsset(id) {
+      if (!confirm('確定要刪除這筆資產嗎？')) return;
+      const { error } = await supabaseClient.from('assets').delete().eq('id', id);
+      if (error) alert('刪除失敗: ' + error.message);
+      else loadAssets();
+    }
+
+    // 🏦 帳戶管理 CRUD
+    function openAccountModal(id = '', name = '') {
+      if (!hasAccountsTable) return alert('請先在 Supabase SQL Editor 建立 accounts 資料表才能使用獨立帳戶管理功能。');
+      document.getElementById('edit-account-id').value = id;
+      document.getElementById('account-modal-title').innerText = id ? '✏️ 編輯帳戶' : '🏦 新增帳戶';
+      document.getElementById('account-name-input').value = name;
+      toggleAccountModal(true);
+    }
+
+    async function handleAccountFormSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('edit-account-id').value;
+      const name = document.getElementById('account-name-input').value.trim();
+      if (!name) return;
+
+      if (id) {
+        const { error } = await supabaseClient.from('accounts').update({ name }).eq('id', id);
+        if (error) alert('更新帳戶失敗: ' + error.message);
+        else {
+          toggleAccountModal(false);
+          loadAccounts();
+        }
+      } else {
+        const { error } = await supabaseClient.from('accounts').insert([{ user_id: currentUser.id, name }]);
+        if (error) alert('新增帳戶失敗: ' + error.message);
+        else {
+          toggleAccountModal(false);
+          loadAccounts();
+        }
+      }
+    }
+
+    async function deleteAccount(id) {
+      if (!confirm('確定要刪除此帳戶嗎？')) return;
+      const { error } = await supabaseClient.from('accounts').delete().eq('id', id);
+      if (error) alert('刪除帳戶失敗: ' + error.message);
+      else loadAccounts();
+    }
+
+    // 💳 收支紀錄管理
+    async function loadTransactions() {
+      if (!currentUser) return;
+      const { data: txs, error } = await supabaseClient.from('transactions').select('*').order('created_at', { ascending: false });
+      if (error) return console.error('Fetch tx error:', error);
+
+      rawTransactions = txs || [];
+      updateMonthFilterOptions();
+      renderTransactions();
+    }
+
+    function updateMonthFilterOptions() {
+      const select = document.getElementById('tx-month-filter');
+      const exportRangeSelect = document.getElementById('export-tx-range');
+
+      const currentSelected = select.value;
+      const monthsSet = new Set();
+      const yearsSet = new Set();
+
+      rawTransactions.forEach(t => {
+        const dateObj = t.created_at ? new Date(t.created_at) : new Date();
+        const yStr = `${dateObj.getFullYear()}年`;
+        const mStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+        monthsSet.add(mStr);
+        yearsSet.add(yStr);
+      });
+
+      const sortedMonths = Array.from(monthsSet).sort().reverse();
+      const sortedYears = Array.from(yearsSet).sort().reverse();
+
+      let html = `<option value="all">全部紀錄</option>`;
+      sortedMonths.forEach(m => html += `<option value="${m}">${m}</option>`);
+      select.innerHTML = html;
+      if (Array.from(select.options).some(o => o.value === currentSelected)) select.value = currentSelected;
+
+      let exportHtml = `<option value="all">全部歷史紀錄</option>`;
+      exportHtml += `<optgroup label="依年份匯出">`;
+      sortedYears.forEach(y => exportHtml += `<option value="Y:${y.replace('年','')}">${y} 全年紀錄</option>`);
+      exportHtml += `</optgroup><optgroup label="依月份匯出">`;
+      sortedMonths.forEach(m => exportHtml += `<option value="M:${m}">${m} 月份紀錄</option>`);
+      exportHtml += `</optgroup>`;
+      exportRangeSelect.innerHTML = exportHtml;
+    }
+
+    function renderTransactions() {
+      const selectedMonth = document.getElementById('tx-month-filter').value;
+      const container = document.getElementById('tx-list');
+
+      let filtered = rawTransactions;
+      if (selectedMonth !== 'all') {
+        filtered = rawTransactions.filter(t => {
+          const dateObj = t.created_at ? new Date(t.created_at) : new Date();
+          const mStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+          return mStr === selectedMonth;
+        });
+      }
+
+      let incSum = 0, expSum = 0;
+      filtered.forEach(t => {
+        const amt = Number(t.amount) || 0;
+        if (t.type === 'income' || t.type === 'realize') incSum += amt;
+        else if (t.type === 'expense') expSum += amt;
+      });
+
+      document.getElementById('sum-income').innerText = 'NT$ ' + Math.round(incSum).toLocaleString();
+      document.getElementById('sum-expense').innerText = 'NT$ ' + Math.round(expSum).toLocaleString();
+      document.getElementById('sum-net').innerText = 'NT$ ' + Math.round(incSum - expSum).toLocaleString();
+
+      if (!filtered || filtered.length === 0) {
+        container.innerHTML = `<div class="text-center p-4 text-slate-500 text-xs">該月份尚無收支紀錄</div>`;
+        return;
+      }
+
+      const txTypeBadge = {
+        'income': { label: '收入', color: 'text-emerald-400 bg-emerald-950/60 border-emerald-700' },
+        'expense': { label: '支出', color: 'text-rose-400 bg-rose-950/60 border-rose-700' },
+        'realize': { label: '變現', color: 'text-blue-400 bg-blue-950/60 border-blue-700' }
+      };
+
+      container.innerHTML = filtered.map(t => {
+        const badge = txTypeBadge[t.type] || { label: t.type, color: 'text-slate-300 bg-slate-800 border-slate-600' };
+        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
+        return `
+          <div class="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-xl border border-slate-700/50 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded border ${badge.color}">${badge.label}</span>
+              <div>
+                <div class="font-medium text-slate-200">${t.category}</div>
+                <div class="text-[10px] text-slate-500">${dateStr}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-bold text-slate-100">NT$ ${Number(t.amount).toLocaleString()}</span>
+              <button onclick="deleteTransaction('${t.id}')" class="text-slate-500 hover:text-red-400 transition p-1">✕</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function handleTransaction(e) {
+      e.preventDefault();
+      if (!currentUser) return alert('請先登入！');
+
+      const type = document.getElementById('tx-type').value;
+      const category = document.getElementById('tx-category').value;
+      const amount = parseFloat(document.getElementById('tx-amount').value);
+      const dateVal = document.getElementById('tx-date').value;
+      const targetAssetId = document.getElementById('tx-target-asset-id').value;
+
+      const created_at = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
+
+      const { error: txErr } = await supabaseClient.from('transactions').insert([{
+        user_id: currentUser.id, type, category, amount, created_at
+      }]);
+
+      if (txErr) return alert('紀錄失敗: ' + txErr.message);
+
+      if (targetAssetId) {
+        const targetAsset = loadedAssets.find(a => a.id === targetAssetId);
+        if (targetAsset) {
+          let currentQty = parseFloat(targetAsset.quantity);
+          if (type === 'income' || type === 'realize') {
+            currentQty += amount;
+          } else if (type === 'expense') {
+            currentQty = Math.max(0, currentQty - amount);
+          }
+
+          const { error: assetErr } = await supabaseClient.from('assets')
+            .update({ quantity: currentQty })
+            .eq('id', targetAssetId);
+
+          if (assetErr) alert('收支已紀錄，但連動更新銀行存款失敗: ' + assetErr.message);
+          else alert(`已成功紀錄收支，並自動將「${targetAsset.name}」存款餘額更新為：${currentQty}`);
+        }
+      }
+
+      document.getElementById('tx-category').value = '';
+      document.getElementById('tx-amount').value = '';
+      loadTransactions();
+      loadAssets();
+    }
+
+    async function deleteTransaction(id) {
+      if (!confirm('確定要刪除這筆收支紀錄嗎？')) return;
+      const { error } = await supabaseClient.from('transactions').delete().eq('id', id);
+      if (error) alert('刪除失敗: ' + error.message);
+      else loadTransactions();
+    }
+
+    function downloadCSV(csvContent, fileName) {
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function exportAssetsCSV() {
+      if (!loadedAssets || loadedAssets.length === 0) return alert('目前沒有資產資料可供匯出');
+
+      let csv = "資產名稱,股票代碼,類別,存放帳戶,數量,計價幣別,最新單價,折算台幣估值\n";
+      loadedAssets.forEach(a => {
+        const typeLabel = typeMap[a.type] || a.type;
+        const acc = a.account || '預設帳戶';
+        csv += `"${a.name}","${a.symbol || ''}","${typeLabel}","${acc}",${a.quantity},"${a._currency}",${a._activePrice},${Math.round(a._twdVal)}\n`;
+      });
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      downloadCSV(csv, `個人資產清單_${dateStr}.csv`);
+    }
+
+    function exportTransactionsCSV() {
+      if (!rawTransactions || rawTransactions.length === 0) return alert('目前沒有收支紀錄可供匯出');
+
+      const rangeVal = document.getElementById('export-tx-range').value;
+      let filtered = rawTransactions;
+
+      if (rangeVal.startsWith('Y:')) {
+        const year = rangeVal.replace('Y:', '');
+        filtered = rawTransactions.filter(t => new Date(t.created_at).getFullYear().toString() === year);
+      } else if (rangeVal.startsWith('M:')) {
+        const month = rangeVal.replace('M:', '');
+        filtered = rawTransactions.filter(t => {
+          const d = new Date(t.created_at);
+          const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          return mStr === month;
+        });
+      }
+
+      if (filtered.length === 0) return alert('選取範圍內無收支紀錄');
+
+      const typeNameMap = { 'income': '收入', 'expense': '支出', 'realize': '資產變現' };
+      let csv = "日期,類型,說明/分類,金額(TWD)\n";
+      filtered.forEach(t => {
+        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
+        csv += `"${dateStr}","${typeNameMap[t.type] || t.type}","${t.category}",${t.amount}\n`;
+      });
+
+      downloadCSV(csv, `收支紀錄_${rangeVal.replace(':', '_')}.csv`);
+    }
+
+    function toggleAssetModal(show) {
+      document.getElementById('asset-modal').classList.toggle('hidden', !show);
+      if (show) {
+        populateAccountOptions();
+        toggleSymbolInput(document.getElementById('new-asset-type').value);
+      }
+    }
+
+    function toggleAdjustModal(show) {
+      document.getElementById('adjust-modal').classList.toggle('hidden', !show);
+    }
+
+    function toggleAccountModal(show) {
+      document.getElementById('account-modal').classList.toggle('hidden', !show);
+    }
+
+    function toggleExportModal(show) {
+      document.getElementById('export-modal').classList.toggle('hidden', !show);
+    }
+
+    window.onload = init;
+  </script>
 </body>
 </html>
