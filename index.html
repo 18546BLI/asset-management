@@ -115,7 +115,7 @@
       </section>
 
       <!-- 💰 Tab 2: 資產清單管理 (Assets) -->
-      <section id="tab-assets" class="space-y-6">
+      <section id="tab-assets" class="space-y-6 hidden">
         <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
           <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-700 pb-4">
             <h2 class="text-xl font-bold text-slate-200">📊 個人資產清單</h2>
@@ -191,7 +191,7 @@
       </section>
 
       <!-- 🏦 Tab 3: 帳戶清單管理 (Accounts) -->
-      <section id="tab-accounts" class="space-y-6">
+      <section id="tab-accounts" class="space-y-6 hidden">
         <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex justify-between items-center">
           <div>
             <h2 class="text-xl font-bold text-slate-200">🏦 存放帳戶 / 券商管理</h2>
@@ -206,7 +206,7 @@
       </section>
 
       <!-- 💳 Tab 4: 快速收支與紀錄 (Transactions) -->
-      <section id="tab-transactions" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <section id="tab-transactions" class="grid grid-cols-1 lg:grid-cols-12 gap-6 hidden">
         <!-- 左側：登記表單 (占 5 格) -->
         <div class="lg:col-span-5 bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
           <h2 class="text-xl font-bold text-slate-200 border-b border-slate-700 pb-4">💳 快速收支與變現登記</h2>
@@ -463,6 +463,12 @@
       'other': '📦 其他'
     };
 
+    function getRecentDateStr() {
+      const d = new Date();
+      d.setDate(d.getDate() - 10);
+      return d.toISOString().split('T')[0];
+    }
+
     async function init() {
       document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
       await fetchRates();
@@ -602,286 +608,213 @@
         const res = await fetch(stooqUrl);
         const data = await res.json();
         const price = data?.symbols?.[0]?.close;
-        if (price && !isNaN(price) && price > 0) {
-          return parseFloat(price);
-        }
-      } catch (e) {}
-
-      // 3. 備援抓價 (Yahoo Finance via AllOrigins)
-      try {
-        const backupUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}`;
-        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(backupUrl)}`);
-        const data = await res.json();
-        const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        if (price && !isNaN(price) && price > 0) {
-          return parseFloat(price);
-        }
+        if (price && !isNaN(price)) return parseFloat(price);
       } catch (e) {}
 
       return null;
     }
 
-    function getRecentDateStr() {
-      const d = new Date();
-      d.setDate(d.getDate() - 10);
-      return d.toISOString().split('T')[0];
-    }
-
+    // 帳戶管理
     async function loadAccounts() {
       if (!currentUser) return;
-      const { data, error } = await supabaseClient.from('accounts').select('*').order('created_at', { ascending: true });
-      if (error) {
+      const warningEl = document.getElementById('accounts-table-warning');
+
+      try {
+        const { data, error } = await supabaseClient
+          .from('accounts')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .order('name');
+
+        if (error) {
+          hasAccountsTable = false;
+          warningEl.classList.remove('hidden');
+          renderAccountsList();
+          return;
+        }
+
+        hasAccountsTable = true;
+        warningEl.classList.add('hidden');
+        dbAccounts = data || [];
+        
+        if (dbAccounts.length === 0) {
+          userAccountsList.forEach(async (accName) => {
+            await supabaseClient.from('accounts').insert([{ user_id: currentUser.id, name: accName }]);
+          });
+          const { data: initData } = await supabaseClient.from('accounts').select('*').eq('user_id', currentUser.id);
+          dbAccounts = initData || [];
+        }
+
+        userAccountsList = dbAccounts.map(a => a.name);
+        renderAccountsList();
+        populateAccountDropdowns();
+      } catch (err) {
         hasAccountsTable = false;
-        document.getElementById('accounts-table-warning').classList.remove('hidden');
-        renderAccountGrid();
-        return;
+        warningEl.classList.remove('hidden');
+        renderAccountsList();
       }
-
-      hasAccountsTable = true;
-      document.getElementById('accounts-table-warning').classList.add('hidden');
-      dbAccounts = data || [];
-      
-      dbAccounts.forEach(acc => {
-        if (!userAccountsList.includes(acc.name)) userAccountsList.push(acc.name);
-      });
-
-      renderAccountGrid();
-      populateFilterAccountOptions();
     }
 
-    function renderAccountGrid() {
+    function renderAccountsList() {
       const container = document.getElementById('accounts-grid-container');
-      if (!hasAccountsTable) {
-        let html = '';
-        userAccountsList.forEach(accName => {
-          html += `
-            <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-2">
-              <div class="text-base font-bold text-slate-100">🏦 ${accName}</div>
-              <div class="text-xs text-slate-400">目前資產紀錄關聯帳戶</div>
-            </div>
-          `;
-        });
-        container.innerHTML = html;
+      container.innerHTML = '';
+
+      if (userAccountsList.length === 0) {
+        container.innerHTML = `<div class="text-slate-500 text-sm col-span-full">尚未建立任何帳戶。</div>`;
         return;
       }
 
-      if (!dbAccounts || dbAccounts.length === 0) {
-        container.innerHTML = `<div class="text-slate-500 text-sm col-span-full border border-slate-800 rounded-xl p-6 text-center">尚無獨立帳戶資料，點擊右上角「+ 新增帳戶」新增</div>`;
-        return;
-      }
-
-      container.innerHTML = dbAccounts.map(acc => `
-        <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-3">
-          <div class="flex justify-between items-center">
-            <h3 class="font-bold text-base text-slate-100">🏦 ${acc.name}</h3>
-            <div class="flex gap-1.5">
-              <button onclick="openAccountModal('${acc.id}', '${acc.name}')" class="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 border border-emerald-800 px-2 py-1 rounded-md">編輯</button>
-              <button onclick="deleteAccount('${acc.id}')" class="text-xs text-red-400 hover:text-red-300 bg-red-950/60 border border-red-800 px-2 py-1 rounded-md">刪除</button>
+      userAccountsList.forEach(accName => {
+        const dbAcc = dbAccounts.find(a => a.name === accName);
+        const card = document.createElement('div');
+        card.className = "bg-slate-800 border border-slate-700 rounded-2xl p-4 flex justify-between items-center shadow-md";
+        card.innerHTML = `
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🏦</span>
+            <div>
+              <h3 class="font-bold text-slate-200">${accName}</h3>
+              <p class="text-[11px] text-slate-400">連動資產與收支帳戶</p>
             </div>
           </div>
-        </div>
-      `).join('');
+          ${hasAccountsTable && dbAcc ? `
+            <div class="flex gap-2">
+              <button onclick="openAccountModal('${dbAcc.id}', '${dbAcc.name}')" class="text-xs text-emerald-400 hover:text-emerald-300">編輯</button>
+              <button onclick="deleteAccount('${dbAcc.id}')" class="text-xs text-rose-400 hover:text-rose-300">刪除</button>
+            </div>
+          ` : ''}
+        `;
+        container.appendChild(card);
+      });
     }
 
+    function populateAccountDropdowns() {
+      const select = document.getElementById('new-asset-account-select');
+      const filterSelect = document.getElementById('asset-filter-account');
+      if (!select) return;
+
+      select.innerHTML = userAccountsList.map(a => `<option value="${a}">${a}</option>`).join('') +
+        `<option value="__CUSTOM__">+ 新增自訂帳戶...</option>`;
+
+      if (filterSelect) {
+        filterSelect.innerHTML = `<option value="all">全部帳戶</option>` +
+          userAccountsList.map(a => `<option value="${a}">${a}</option>`).join('');
+      }
+    }
+
+    function openAccountModal(id = '', name = '') {
+      document.getElementById('edit-account-id').value = id;
+      document.getElementById('account-name-input').value = name;
+      document.getElementById('account-modal-title').innerText = id ? '✏️ 編輯帳戶' : '🏦 新增帳戶';
+      toggleAccountModal(true);
+    }
+
+    function toggleAccountModal(show) {
+      document.getElementById('account-modal').classList.toggle('hidden', !show);
+    }
+
+    async function handleAccountFormSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('edit-account-id').value;
+      const name = document.getElementById('account-name-input').value.trim();
+
+      if (!name) return;
+
+      if (id) {
+        await supabaseClient.from('accounts').update({ name }).eq('id', id);
+      } else {
+        await supabaseClient.from('accounts').insert([{ user_id: currentUser.id, name }]);
+      }
+
+      toggleAccountModal(false);
+      await loadAccounts();
+    }
+
+    async function deleteAccount(id) {
+      if (!confirm('確定要刪除此帳戶嗎？（不會影響既有資產）')) return;
+      await supabaseClient.from('accounts').delete().eq('id', id);
+      await loadAccounts();
+    }
+
+    function handleAccountSelectChange(val) {
+      const customInput = document.getElementById('new-asset-account-custom');
+      if (val === '__CUSTOM__') {
+        customInput.classList.remove('hidden');
+        customInput.required = true;
+      } else {
+        customInput.classList.add('hidden');
+        customInput.required = false;
+      }
+    }
+
+    // 資產載入與呈現
     async function loadAssets() {
       if (!currentUser) return;
-      const { data: assets, error } = await supabaseClient.from('assets').select('*');
-      if (error) return console.error('Fetch error:', error);
+      const tbody = document.getElementById('asset-table-body');
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-slate-500">最新價格抓取中...</td></tr>';
 
-      loadedAssets = assets || [];
+      const { data, error } = await supabaseClient
+        .from('assets')
+        .select('*')
+        .eq('user_id', currentUser.id);
 
-      loadedAssets.forEach(a => {
-        const acc = a.account || '預設帳戶';
-        if (!userAccountsList.includes(acc)) userAccountsList.push(acc);
-      });
-
-      populateTxAssetSelectOptions();
-      populateFilterAccountOptions();
-
-      if (!loadedAssets || loadedAssets.length === 0) {
-        document.getElementById('asset-display-container').innerHTML = `
-          <div class="text-center p-8 text-slate-500 border border-slate-700/50 rounded-xl">
-            目前尚無資產資料，點擊右上角「+ 新增資產」開始建立
-          </div>`;
-        document.getElementById('total-assets').innerText = 'NT$ 0';
-        document.getElementById('stat-stock').innerText = 'NT$ 0';
-        document.getElementById('stat-cash').innerText = 'NT$ 0';
-        renderAccountDistribution({}, 0);
-        renderAllocationChart({ '股票/ETF': 0, '現金/存款': 0, '其他': 0 });
+      if (error) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-rose-400">載入失敗：' + error.message + '</td></tr>';
         return;
       }
 
-      for (let a of loadedAssets) {
-        let activePrice = a.current_price || 1;
-        let isLivePrice = false;
-        let currency = a.currency || 'TWD';
+      const assets = data || [];
 
-        if (a.type === 'stock' || a.type === 'fund') {
-          if (a.symbol) {
-            const livePrice = await fetchStockPrice(a.symbol);
-            if (livePrice !== null && livePrice > 0) {
-              activePrice = livePrice;
-              isLivePrice = true;
-            }
-          }
-        } else if (a.type === 'cash') {
-          activePrice = 1;
+      // 批次抓取即時價格
+      for (let item of assets) {
+        if (item.type === 'stock' && item.symbol) {
+          const livePrice = await fetchStockPrice(item.symbol);
+          if (livePrice) item.price = livePrice;
         }
-
-        let rate = 1;
-        if (currency === 'USD') rate = currentUsdRate;
-        else if (currency === 'JPY') rate = currentJpyRate;
-
-        a._activePrice = activePrice;
-        a._isLivePrice = isLivePrice;
-        a._currency = currency;
-        a._twdVal = a.quantity * activePrice * rate;
       }
 
-      let totalTwd = 0;
-      let stockTwd = 0;
-      let cashTwd = 0;
-      let otherTwd = 0;
-      let accountTotals = {};
-      let chartCategoryData = {};
-
-      loadedAssets.forEach(a => {
-        totalTwd += a._twdVal;
-        const accName = a.account || '預設帳戶';
-        accountTotals[accName] = (accountTotals[accName] || 0) + a._twdVal;
-
-        const catName = typeMap[a.type] || '其他';
-        chartCategoryData[catName] = (chartCategoryData[catName] || 0) + a._twdVal;
-
-        if (a.type === 'stock') stockTwd += a._twdVal;
-        else if (a.type === 'cash') cashTwd += a._twdVal;
-        else otherTwd += a._twdVal;
-      });
-
-      document.getElementById('total-assets').innerText = 'NT$ ' + Math.round(totalTwd).toLocaleString();
-      document.getElementById('stat-stock').innerText = 'NT$ ' + Math.round(stockTwd).toLocaleString();
-      document.getElementById('stat-cash').innerText = 'NT$ ' + Math.round(cashTwd).toLocaleString();
-
-      renderAccountDistribution(accountTotals, totalTwd);
-      renderAllocationChart(chartCategoryData);
+      loadedAssets = assets;
       renderAssetView();
-    }
-
-    function renderAllocationChart(chartData) {
-      const ctx = document.getElementById('allocation-chart');
-      if (!ctx) return;
-
-      const labels = Object.keys(chartData);
-      const dataValues = Object.values(chartData);
-
-      if (allocationChart) {
-        allocationChart.destroy();
-      }
-
-      allocationChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: labels,
-          datasets: [{
-            data: dataValues,
-            backgroundColor: [
-              '#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#64748b'
-            ],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: { color: '#cbd5e1', font: { size: 11 } }
-            }
-          }
-        }
-      });
-    }
-
-    function populateFilterAccountOptions() {
-      const select = document.getElementById('asset-filter-account');
-      if (!select) return;
-      let html = `<option value="all">全部帳戶</option>`;
-      userAccountsList.forEach(acc => {
-        html += `<option value="${acc}">${acc}</option>`;
-      });
-      select.innerHTML = html;
-    }
-
-    function populateTxAssetSelectOptions() {
-      const select = document.getElementById('tx-target-asset-id');
-      const cashAssets = (loadedAssets || []).filter(a => a.type === 'cash');
-
-      if (cashAssets.length === 0) {
-        select.innerHTML = `<option value="">-- 無可用銀行/現金帳戶 (請先至左側新增現金資產) --</option>`;
-        return;
-      }
-
-      let html = `<option value="">-- 不連動變更帳戶 (僅純紀錄收支) --</option>`;
-      cashAssets.forEach(a => {
-        const acc = a.account || '預設帳戶';
-        html += `<option value="${a.id}">🏦 [${acc}] ${a.name} (${a.currency || 'TWD'} 餘額: ${Number(a.quantity).toLocaleString()})</option>`;
-      });
-      select.innerHTML = html;
-    }
-
-    function updateTxLinkHint(txType) {
-      const label = document.getElementById('tx-asset-link-label');
-      const hint = document.getElementById('tx-asset-link-hint');
-
-      if (txType === 'income') {
-        label.innerText = '🏦 連動加算銀行/現金帳戶 (選填)：';
-        hint.innerText = '選擇銀行帳戶後，此筆收入將會自動【加總】進該帳戶存款中。';
-      } else if (txType === 'expense') {
-        label.innerText = '🏦 連動扣除銀行/現金帳戶 (選填)：';
-        hint.innerText = '選擇銀行帳戶後，此筆支出將會自動從該帳戶存款【扣除】。';
-      } else if (txType === 'realize') {
-        label.innerText = '🏦 變現轉入銀行/現金帳戶 (選填)：';
-        hint.innerText = '選擇銀行帳戶後，變現賣出的資金會自動【加算】進入該帳戶中。';
-      }
+      updateDashboardStats();
+      populateTxTargetAssets();
     }
 
     function renderAssetView() {
-      const searchKeyword = document.getElementById('asset-search').value.trim().toLowerCase();
-      const groupMode = document.getElementById('asset-group-mode').value;
-      const filterAccount = document.getElementById('asset-filter-account').value;
+      const mode = document.getElementById('asset-group-mode').value;
+      const search = document.getElementById('asset-search').value.toLowerCase().trim();
+      const filterAcc = document.getElementById('asset-filter-account').value;
       const filterType = document.getElementById('asset-filter-type').value;
       const sortMode = document.getElementById('asset-sort-mode').value;
-      const container = document.getElementById('asset-display-container');
 
-      let filtered = loadedAssets.filter(a => {
-        const nameMatch = (a.name || '').toLowerCase().includes(searchKeyword);
-        const symbolMatch = (a.symbol || '').toLowerCase().includes(searchKeyword);
-        const accountMatch = (a.account || '預設帳戶').toLowerCase().includes(searchKeyword);
-        const typeMatch = (typeMap[a.type] || '').toLowerCase().includes(searchKeyword);
-        const currencyMatch = (a._currency || '').toLowerCase().includes(searchKeyword);
-
-        const passAccount = filterAccount === 'all' || (a.account || '預設帳戶') === filterAccount;
-        const passType = filterType === 'all' || a.type === filterType;
-
-        return (nameMatch || symbolMatch || accountMatch || typeMatch || currencyMatch) && passAccount && passType;
+      let list = loadedAssets.map(item => {
+        let rate = 1;
+        if (item.currency === 'USD') rate = currentUsdRate;
+        else if (item.currency === 'JPY') rate = currentJpyRate;
+        const twdVal = item.qty * item.price * rate;
+        return { ...item, twdVal };
       });
 
+      // 篩選
+      if (search) {
+        list = list.filter(i =>
+          (i.name && i.name.toLowerCase().includes(search)) ||
+          (i.symbol && i.symbol.toLowerCase().includes(search)) ||
+          (i.account_name && i.account_name.toLowerCase().includes(search))
+        );
+      }
+      if (filterAcc !== 'all') list = list.filter(i => i.account_name === filterAcc);
+      if (filterType !== 'all') list = list.filter(i => i.type === filterType);
+
       // 排序
-      filtered.sort((a, b) => {
-        if (sortMode === 'val_desc') return b._twdVal - a._twdVal;
-        if (sortMode === 'val_asc') return a._twdVal - b._twdVal;
-        if (sortMode === 'name_asc') return (a.name || '').localeCompare(b.name || '');
+      list.sort((a, b) => {
+        if (sortMode === 'val_desc') return b.twdVal - a.twdVal;
+        if (sortMode === 'val_asc') return a.twdVal - b.twdVal;
+        if (sortMode === 'name_asc') return a.name.localeCompare(b.name);
         return 0;
       });
 
-      if (filtered.length === 0) {
-        container.innerHTML = `<div class="text-center p-8 text-slate-500">查無符合條件的資產資料</div>`;
-        return;
-      }
+      const container = document.getElementById('asset-display-container');
 
-      if (groupMode === 'flat') {
-        let rows = filtered.map(a => renderAssetRow(a)).join('');
+      if (mode === 'flat') {
         container.innerHTML = `
           <table class="w-full text-left text-sm text-slate-300">
             <thead class="text-xs uppercase bg-slate-700/50 text-slate-400">
@@ -894,35 +827,39 @@
                 <th class="p-3 text-center">操作</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-700">${rows}</tbody>
+            <tbody id="asset-table-body" class="divide-y divide-slate-700">
+              ${renderTableRows(list)}
+            </tbody>
           </table>
         `;
       } else {
+        // 分組渲染
         let groups = {};
-        filtered.forEach(a => {
+        list.forEach(item => {
           let key = '其他';
-          if (groupMode === 'account') key = a.account || '預設帳戶';
-          else if (groupMode === 'type') key = typeMap[a.type] || '其他';
-          else if (groupMode === 'currency') key = `${a._currency || 'TWD'} 計價資產`;
-          else if (groupMode === 'symbol') key = a.symbol ? `${a.symbol} (${a.name})` : a.name;
+          if (mode === 'account') key = item.account_name || '未分類帳戶';
+          else if (mode === 'type') key = typeMap[item.type] || '其他類別';
+          else if (mode === 'symbol') key = item.symbol || item.name || '其他標的';
+          else if (mode === 'currency') key = item.currency || 'TWD';
 
           if (!groups[key]) groups[key] = [];
-          groups[key].push(a);
+          groups[key].push(item);
         });
 
-        let html = '<div class="space-y-4">';
-        for (const [groupName, items] of Object.entries(groups)) {
-          const groupTotal = items.reduce((sum, item) => sum + item._twdVal, 0);
-          const itemRows = items.map(a => renderAssetRow(a)).join('');
-
+        let html = '<div class="space-y-6">';
+        for (let grpName in groups) {
+          const items = groups[grpName];
+          const grpTotal = items.reduce((sum, i) => sum + i.twdVal, 0);
           html += `
-            <div class="bg-slate-900/40 border border-slate-700/70 rounded-xl overflow-hidden">
-              <div class="flex justify-between items-center bg-slate-700/40 px-4 py-2.5 font-bold text-slate-200">
-                <span>${groupName} (${items.length})</span>
-                <span class="text-emerald-400">小計: NT$ ${Math.round(groupTotal).toLocaleString()}</span>
+            <div class="bg-slate-900/40 rounded-xl border border-slate-700 overflow-hidden">
+              <div class="bg-slate-800/80 px-4 py-3 flex justify-between items-center border-b border-slate-700">
+                <h3 class="font-bold text-emerald-400 text-sm">${grpName} (${items.length})</h3>
+                <span class="text-xs text-slate-300 font-medium">小計：NT$ ${Math.round(grpTotal).toLocaleString()}</span>
               </div>
               <table class="w-full text-left text-sm text-slate-300">
-                <tbody class="divide-y divide-slate-700/60">${itemRows}</tbody>
+                <tbody class="divide-y divide-slate-700">
+                  ${renderTableRows(items)}
+                </tbody>
               </table>
             </div>
           `;
@@ -932,495 +869,370 @@
       }
     }
 
-    function renderAssetRow(a) {
-      const accName = a.account || '預設帳戶';
-      return `
-        <tr class="hover:bg-slate-700/30">
-          <td class="p-3 font-medium text-slate-100">${a.name} <span class="text-xs text-slate-400">(${a.symbol || '-'})</span></td>
-          <td class="p-3"><span class="bg-slate-700/60 border border-slate-600 text-slate-300 text-xs px-2 py-0.5 rounded-md">${accName}</span></td>
-          <td class="p-3 font-bold text-slate-100">${Number(a.quantity).toLocaleString()}</td>
-          <td class="p-3 font-medium ${a._isLivePrice ? 'text-emerald-300' : 'text-slate-300'}">
-            ${a._currency} ${Number(a._activePrice).toFixed(2)}
-            ${a._isLivePrice ? '<span class="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded ml-1">即時</span>' : (a.type === 'cash' ? '<span class="text-[10px] text-slate-400 ml-1">(現金)</span>' : '<span class="text-[10px] text-slate-500 ml-1">(預設)</span>')}
+    function renderTableRows(items) {
+      if (items.length === 0) {
+        return '<tr><td colspan="6" class="text-center p-6 text-slate-500">無符合條件之資產資料。</td></tr>';
+      }
+
+      return items.map(item => `
+        <tr class="hover:bg-slate-800/50 transition">
+          <td class="p-3">
+            <div class="font-bold text-slate-100">${item.name}</div>
+            ${item.symbol ? `<div class="text-xs text-emerald-400 font-mono">${item.symbol}</div>` : ''}
           </td>
-          <td class="p-3 font-semibold text-emerald-400">NT$ ${Math.round(a._twdVal).toLocaleString()}</td>
-          <td class="p-3 text-center flex justify-center gap-1.5">
-            <button onclick="openAdjustModal('${a.id}', '${a.name}', ${a.quantity})" class="text-emerald-400 hover:text-emerald-300 text-xs bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-800 px-2 py-1 rounded-lg transition">⚙️ 增減</button>
-            <button onclick="editAsset('${a.id}')" class="text-blue-400 hover:text-blue-300 text-xs bg-blue-950/60 hover:bg-blue-900/60 border border-blue-800 px-2 py-1 rounded-lg transition">編輯</button>
-            <button onclick="deleteAsset('${a.id}')" class="text-red-400 hover:text-red-300 text-xs bg-red-950/50 hover:bg-red-900/50 border border-red-800 px-2 py-1 rounded-lg transition">刪除</button>
+          <td class="p-3"><span class="bg-slate-700/60 px-2 py-1 rounded text-xs text-slate-300">${item.account_name || '預設帳戶'}</span></td>
+          <td class="p-3 font-mono">${item.qty.toLocaleString()}</td>
+          <td class="p-3 font-mono">${item.price.toLocaleString()} <span class="text-xs text-slate-400">${item.currency}</span></td>
+          <td class="p-3 font-bold text-emerald-400 font-mono">NT$ ${Math.round(item.twdVal).toLocaleString()}</td>
+          <td class="p-3 text-center space-x-2">
+            <button onclick="openAdjustModal('${item.id}', '${item.name}')" class="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded text-slate-200">微調</button>
+            <button onclick="deleteAsset('${item.id}')" class="text-xs bg-rose-950/60 hover:bg-rose-900 border border-rose-800 px-2 py-1 rounded text-rose-300">刪除</button>
           </td>
         </tr>
-      `;
+      `).join('');
     }
 
-    function renderAccountDistribution(accountTotals, totalTwd) {
-      const container = document.getElementById('account-distribution');
-      if (!accountTotals || Object.keys(accountTotals).length === 0) {
-        container.innerHTML = `<div class="text-slate-500 text-xs col-span-full">尚無帳戶資料</div>`;
-        return;
-      }
+    function updateDashboardStats() {
+      let total = 0;
+      let stockVal = 0;
+      let cashVal = 0;
+      let accountTotals = {};
 
-      let html = '';
-      for (const [acc, amt] of Object.entries(accountTotals)) {
-        const pct = totalTwd > 0 ? ((amt / totalTwd) * 100).toFixed(1) : 0;
-        html += `
-          <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 space-y-1">
-            <div class="text-xs text-slate-400 truncate">${acc}</div>
-            <div class="text-base font-bold text-slate-200">NT$ ${Math.round(amt).toLocaleString()}</div>
-            <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-              <div class="bg-emerald-500 h-1.5 rounded-full" style="width: ${pct}%"></div>
-            </div>
-            <div class="text-[10px] text-slate-500 text-right">${pct}%</div>
-          </div>
-        `;
-      }
-      container.innerHTML = html;
-    }
+      loadedAssets.forEach(item => {
+        let rate = 1;
+        if (item.currency === 'USD') rate = currentUsdRate;
+        else if (item.currency === 'JPY') rate = currentJpyRate;
+        const twd = item.qty * item.price * rate;
 
-    function populateAccountOptions() {
-      const select = document.getElementById('new-asset-account-select');
-      let html = userAccountsList.map(acc => `<option value="${acc}">${acc}</option>`).join('');
-      html += `<option value="__NEW__">➕ 新增自訂帳戶...</option>`;
-      select.innerHTML = html;
-      document.getElementById('new-asset-account-custom').classList.add('hidden');
-    }
+        total += twd;
+        if (item.type === 'stock' || item.type === 'fund') stockVal += twd;
+        if (item.type === 'cash') cashVal += twd;
 
-    function handleAccountSelectChange(val) {
-      const customInput = document.getElementById('new-asset-account-custom');
-      if (val === '__NEW__') {
-        customInput.classList.remove('hidden');
-        customInput.focus();
-      } else {
-        customInput.classList.add('hidden');
-      }
-    }
-
-    function toggleSymbolInput(type) {
-      const symbolContainer = document.getElementById('symbol-container');
-      const priceContainer = document.getElementById('price-container');
-      const qtyLabel = document.getElementById('qty-label');
-
-      if (type === 'cash') {
-        symbolContainer.classList.add('hidden');
-        priceContainer.classList.add('hidden');
-        qtyLabel.innerText = '金額 / 數量';
-      } else {
-        symbolContainer.classList.remove('hidden');
-        priceContainer.classList.remove('hidden');
-        qtyLabel.innerText = '本次增加數量 / 股數';
-      }
-    }
-
-    function openAssetModal() {
-      document.getElementById('edit-asset-id').value = '';
-      document.getElementById('asset-modal-title').innerText = '➕ 新增 / 併入資產項目';
-      document.getElementById('new-asset-name').value = '';
-      document.getElementById('new-asset-symbol').value = '';
-      document.getElementById('new-asset-qty').value = '';
-      document.getElementById('new-asset-price').value = '1';
-      toggleAssetModal(true);
-    }
-
-    function editAsset(id) {
-      const a = loadedAssets.find(item => item.id === id);
-      if (!a) return;
-
-      document.getElementById('edit-asset-id').value = a.id;
-      document.getElementById('asset-modal-title').innerText = `✏️ 編輯資產: ${a.name}`;
-      document.getElementById('new-asset-type').value = a.type || 'stock';
-      document.getElementById('new-asset-symbol').value = a.symbol || '';
-      document.getElementById('new-asset-name').value = a.name || '';
-      document.getElementById('new-asset-qty').value = a.quantity;
-      document.getElementById('new-asset-price').value = a.current_price || 1;
-      document.getElementById('new-asset-currency').value = a.currency || 'TWD';
-
-      toggleAssetModal(true);
-      document.getElementById('new-asset-account-select').value = a.account || '預設帳戶';
-      toggleSymbolInput(a.type);
-    }
-
-    async function handleAddOrUpdateAsset(e) {
-      e.preventDefault();
-      if (!currentUser) return alert('請先登入！');
-
-      const editId = document.getElementById('edit-asset-id').value;
-      const type = document.getElementById('new-asset-type').value;
-      let symbol = document.getElementById('new-asset-symbol').value.trim().toUpperCase();
-      let name = document.getElementById('new-asset-name').value.trim();
-      const currency = document.getElementById('new-asset-currency').value;
-      
-      const accountSelect = document.getElementById('new-asset-account-select').value;
-      let account = accountSelect;
-      if (accountSelect === '__NEW__') {
-        account = document.getElementById('new-asset-account-custom').value.trim();
-        if (!account) return alert('請輸入新帳戶名稱！');
-        if (!userAccountsList.includes(account)) userAccountsList.push(account);
-      }
-
-      const quantity = parseFloat(document.getElementById('new-asset-qty').value);
-      let current_price = parseFloat(document.getElementById('new-asset-price').value) || 1;
-
-      if (type === 'cash') {
-        symbol = '';
-        current_price = 1;
-        if (!name) {
-          if (currency === 'USD') name = '美金存款';
-          else if (currency === 'JPY') name = '日圓存款';
-          else name = '台幣存款';
-        }
-      } else {
-        if (!name) name = symbol || '未命名資產';
-      }
-
-      if (editId) {
-        // 編輯模式：直接覆蓋更新
-        const { error } = await supabaseClient.from('assets').update({
-          name, symbol, type, quantity, current_price, currency, account
-        }).eq('id', editId);
-
-        if (error) alert('更新資產失敗: ' + error.message);
-        else {
-          toggleAssetModal(false);
-          loadAssets();
-        }
-      } else {
-        // 新增模式：檢查是否可自動併入同帳戶相同資產
-        const existingAsset = loadedAssets.find(a => {
-          const isSameAccount = (a.account || '預設帳戶') === account;
-          if (type === 'cash') {
-            return a.type === 'cash' && isSameAccount && a.currency === currency;
-          } else {
-            return a.type === type && isSameAccount && a.symbol === symbol;
-          }
-        });
-
-        if (existingAsset) {
-          const updatedQty = parseFloat(existingAsset.quantity) + quantity;
-          const { error } = await supabaseClient.from('assets')
-            .update({ quantity: updatedQty, current_price: current_price })
-            .eq('id', existingAsset.id);
-
-          if (error) alert('更新資產失敗: ' + error.message);
-          else {
-            alert(`已自動併入「${account}」帳戶中的 ${existingAsset.name}！數量更新為: ${updatedQty}`);
-            toggleAssetModal(false);
-            loadAssets();
-          }
-        } else {
-          const { error } = await supabaseClient.from('assets').insert([{
-            user_id: currentUser.id, name, symbol, type, quantity, current_price, currency, account
-          }]);
-
-          if (error) alert('新增資產失敗: ' + error.message);
-          else {
-            toggleAssetModal(false);
-            loadAssets();
-          }
-        }
-      }
-    }
-
-    function openAdjustModal(assetId, assetName, currentQty) {
-      document.getElementById('adjust-asset-id').value = assetId;
-      document.getElementById('adjust-title').innerText = `⚙️ 調整: ${assetName}`;
-      document.getElementById('adjust-amount').value = '';
-      toggleAdjustModal(true);
-    }
-
-    async function handleAdjustSubmit(e) {
-      e.preventDefault();
-      const assetId = document.getElementById('adjust-asset-id').value;
-      const mode = document.getElementById('adjust-mode').value;
-      const amount = parseFloat(document.getElementById('adjust-amount').value);
-
-      if (isNaN(amount) || amount <= 0) return alert('請輸入有效的調整金額/數量！');
-
-      const asset = loadedAssets.find(a => a.id === assetId);
-      if (!asset) return alert('找不到目標資產');
-
-      let newQty = parseFloat(asset.quantity);
-      if (mode === 'add') newQty += amount;
-      else if (mode === 'sub') newQty = Math.max(0, newQty - amount);
-      else if (mode === 'set') newQty = amount;
-
-      const { error } = await supabaseClient.from('assets').update({ quantity: newQty }).eq('id', assetId);
-      if (error) {
-        alert('更新失敗: ' + error.message);
-      } else {
-        toggleAdjustModal(false);
-        loadAssets();
-      }
-    }
-
-    async function deleteAsset(id) {
-      if (!confirm('確定要刪除這筆資產嗎？')) return;
-      const { error } = await supabaseClient.from('assets').delete().eq('id', id);
-      if (error) alert('刪除失敗: ' + error.message);
-      else loadAssets();
-    }
-
-    // 🏦 帳戶管理 CRUD
-    function openAccountModal(id = '', name = '') {
-      if (!hasAccountsTable) return alert('請先在 Supabase SQL Editor 建立 accounts 資料表才能使用獨立帳戶管理功能。');
-      document.getElementById('edit-account-id').value = id;
-      document.getElementById('account-modal-title').innerText = id ? '✏️ 編輯帳戶' : '🏦 新增帳戶';
-      document.getElementById('account-name-input').value = name;
-      toggleAccountModal(true);
-    }
-
-    async function handleAccountFormSubmit(e) {
-      e.preventDefault();
-      const id = document.getElementById('edit-account-id').value;
-      const name = document.getElementById('account-name-input').value.trim();
-      if (!name) return;
-
-      if (id) {
-        const { error } = await supabaseClient.from('accounts').update({ name }).eq('id', id);
-        if (error) alert('更新帳戶失敗: ' + error.message);
-        else {
-          toggleAccountModal(false);
-          loadAccounts();
-        }
-      } else {
-        const { error } = await supabaseClient.from('accounts').insert([{ user_id: currentUser.id, name }]);
-        if (error) alert('新增帳戶失敗: ' + error.message);
-        else {
-          toggleAccountModal(false);
-          loadAccounts();
-        }
-      }
-    }
-
-    async function deleteAccount(id) {
-      if (!confirm('確定要刪除此帳戶嗎？')) return;
-      const { error } = await supabaseClient.from('accounts').delete().eq('id', id);
-      if (error) alert('刪除帳戶失敗: ' + error.message);
-      else loadAccounts();
-    }
-
-    // 💳 收支紀錄管理
-    async function loadTransactions() {
-      if (!currentUser) return;
-      const { data: txs, error } = await supabaseClient.from('transactions').select('*').order('created_at', { ascending: false });
-      if (error) return console.error('Fetch tx error:', error);
-
-      rawTransactions = txs || [];
-      updateMonthFilterOptions();
-      renderTransactions();
-    }
-
-    function updateMonthFilterOptions() {
-      const select = document.getElementById('tx-month-filter');
-      const exportRangeSelect = document.getElementById('export-tx-range');
-
-      const currentSelected = select.value;
-      const monthsSet = new Set();
-      const yearsSet = new Set();
-
-      rawTransactions.forEach(t => {
-        const dateObj = t.created_at ? new Date(t.created_at) : new Date();
-        const yStr = `${dateObj.getFullYear()}年`;
-        const mStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-        monthsSet.add(mStr);
-        yearsSet.add(yStr);
+        const acc = item.account_name || '預設帳戶';
+        accountTotals[acc] = (accountTotals[acc] || 0) + twd;
       });
 
-      const sortedMonths = Array.from(monthsSet).sort().reverse();
-      const sortedYears = Array.from(yearsSet).sort().reverse();
+      document.getElementById('total-assets').innerText = 'NT$ ' + Math.round(total).toLocaleString();
+      document.getElementById('stat-stock').innerText = 'NT$ ' + Math.round(stockVal).toLocaleString();
+      document.getElementById('stat-cash').innerText = 'NT$ ' + Math.round(cashVal).toLocaleString();
 
-      let html = `<option value="all">全部紀錄</option>`;
-      sortedMonths.forEach(m => html += `<option value="${m}">${m}</option>`);
-      select.innerHTML = html;
-      if (Array.from(select.options).some(o => o.value === currentSelected)) select.value = currentSelected;
+      // 各帳戶分佈
+      const distEl = document.getElementById('account-distribution');
+      distEl.innerHTML = Object.keys(accountTotals).map(acc => `
+        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60">
+          <span class="text-xs text-slate-400 block">${acc}</span>
+          <span class="text-sm font-bold text-slate-200">NT$ ${Math.round(accountTotals[acc]).toLocaleString()}</span>
+        </div>
+      `).join('');
 
-      let exportHtml = `<option value="all">全部歷史紀錄</option>`;
-      exportHtml += `<optgroup label="依年份匯出">`;
-      sortedYears.forEach(y => exportHtml += `<option value="Y:${y.replace('年','')}">${y} 全年紀錄</option>`);
-      exportHtml += `</optgroup><optgroup label="依月份匯出">`;
-      sortedMonths.forEach(m => exportHtml += `<option value="M:${m}">${m} 月份紀錄</option>`);
-      exportHtml += `</optgroup>`;
-      exportRangeSelect.innerHTML = exportHtml;
+      // 圖表渲染
+      renderAllocationChart(stockVal, cashVal, total - stockVal - cashVal);
     }
 
-    function renderTransactions() {
-      const selectedMonth = document.getElementById('tx-month-filter').value;
-      const container = document.getElementById('tx-list');
+    function renderAllocationChart(stock, cash, other) {
+      const ctx = document.getElementById('allocation-chart');
+      if (!ctx) return;
 
-      let filtered = rawTransactions;
-      if (selectedMonth !== 'all') {
-        filtered = rawTransactions.filter(t => {
-          const dateObj = t.created_at ? new Date(t.created_at) : new Date();
-          const mStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-          return mStr === selectedMonth;
-        });
-      }
+      if (allocationChart) allocationChart.destroy();
 
-      let incSum = 0, expSum = 0;
-      filtered.forEach(t => {
-        const amt = Number(t.amount) || 0;
-        if (t.type === 'income' || t.type === 'realize') incSum += amt;
-        else if (t.type === 'expense') expSum += amt;
-      });
-
-      document.getElementById('sum-income').innerText = 'NT$ ' + Math.round(incSum).toLocaleString();
-      document.getElementById('sum-expense').innerText = 'NT$ ' + Math.round(expSum).toLocaleString();
-      document.getElementById('sum-net').innerText = 'NT$ ' + Math.round(incSum - expSum).toLocaleString();
-
-      if (!filtered || filtered.length === 0) {
-        container.innerHTML = `<div class="text-center p-4 text-slate-500 text-xs">該月份尚無收支紀錄</div>`;
-        return;
-      }
-
-      const txTypeBadge = {
-        'income': { label: '收入', color: 'text-emerald-400 bg-emerald-950/60 border-emerald-700' },
-        'expense': { label: '支出', color: 'text-rose-400 bg-rose-950/60 border-rose-700' },
-        'realize': { label: '變現', color: 'text-blue-400 bg-blue-950/60 border-blue-700' }
-      };
-
-      container.innerHTML = filtered.map(t => {
-        const badge = txTypeBadge[t.type] || { label: t.type, color: 'text-slate-300 bg-slate-800 border-slate-600' };
-        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
-        return `
-          <div class="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-xl border border-slate-700/50 text-xs">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded border ${badge.color}">${badge.label}</span>
-              <div>
-                <div class="font-medium text-slate-200">${t.category}</div>
-                <div class="text-[10px] text-slate-500">${dateStr}</div>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="font-bold text-slate-100">NT$ ${Number(t.amount).toLocaleString()}</span>
-              <button onclick="deleteTransaction('${t.id}')" class="text-slate-500 hover:text-red-400 transition p-1">✕</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    async function handleTransaction(e) {
-      e.preventDefault();
-      if (!currentUser) return alert('請先登入！');
-
-      const type = document.getElementById('tx-type').value;
-      const category = document.getElementById('tx-category').value;
-      const amount = parseFloat(document.getElementById('tx-amount').value);
-      const dateVal = document.getElementById('tx-date').value;
-      const targetAssetId = document.getElementById('tx-target-asset-id').value;
-
-      const created_at = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
-
-      const { error: txErr } = await supabaseClient.from('transactions').insert([{
-        user_id: currentUser.id, type, category, amount, created_at
-      }]);
-
-      if (txErr) return alert('紀錄失敗: ' + txErr.message);
-
-      if (targetAssetId) {
-        const targetAsset = loadedAssets.find(a => a.id === targetAssetId);
-        if (targetAsset) {
-          let currentQty = parseFloat(targetAsset.quantity);
-          if (type === 'income' || type === 'realize') {
-            currentQty += amount;
-          } else if (type === 'expense') {
-            currentQty = Math.max(0, currentQty - amount);
+      allocationChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['股票 / ETF / 基金', '現金 / 存款', '其他資產'],
+          datasets: [{
+            data: [stock, cash, Math.max(0, other)],
+            backgroundColor: ['#10b981', '#3b82f6', '#f59e0b'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 12 } } }
           }
-
-          const { error: assetErr } = await supabaseClient.from('assets')
-            .update({ quantity: currentQty })
-            .eq('id', targetAssetId);
-
-          if (assetErr) alert('收支已紀錄，但連動更新銀行存款失敗: ' + assetErr.message);
-          else alert(`已成功紀錄收支，並自動將「${targetAsset.name}」存款餘額更新為：${currentQty}`);
         }
-      }
-
-      document.getElementById('tx-category').value = '';
-      document.getElementById('tx-amount').value = '';
-      loadTransactions();
-      loadAssets();
-    }
-
-    async function deleteTransaction(id) {
-      if (!confirm('確定要刪除這筆收支紀錄嗎？')) return;
-      const { error } = await supabaseClient.from('transactions').delete().eq('id', id);
-      if (error) alert('刪除失敗: ' + error.message);
-      else loadTransactions();
-    }
-
-    function downloadCSV(csvContent, fileName) {
-      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", fileName);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-
-    function exportAssetsCSV() {
-      if (!loadedAssets || loadedAssets.length === 0) return alert('目前沒有資產資料可供匯出');
-
-      let csv = "資產名稱,股票代碼,類別,存放帳戶,數量,計價幣別,最新單價,折算台幣估值\n";
-      loadedAssets.forEach(a => {
-        const typeLabel = typeMap[a.type] || a.type;
-        const acc = a.account || '預設帳戶';
-        csv += `"${a.name}","${a.symbol || ''}","${typeLabel}","${acc}",${a.quantity},"${a._currency}",${a._activePrice},${Math.round(a._twdVal)}\n`;
       });
-
-      const dateStr = new Date().toISOString().split('T')[0];
-      downloadCSV(csv, `個人資產清單_${dateStr}.csv`);
     }
 
-    function exportTransactionsCSV() {
-      if (!rawTransactions || rawTransactions.length === 0) return alert('目前沒有收支紀錄可供匯出');
+    // 資產彈窗邏輯
+    function openAssetModal(asset = null) {
+      populateAccountDropdowns();
+      const modal = document.getElementById('asset-modal');
+      modal.classList.remove('hidden');
 
-      const rangeVal = document.getElementById('export-tx-range').value;
-      let filtered = rawTransactions;
-
-      if (rangeVal.startsWith('Y:')) {
-        const year = rangeVal.replace('Y:', '');
-        filtered = rawTransactions.filter(t => new Date(t.created_at).getFullYear().toString() === year);
-      } else if (rangeVal.startsWith('M:')) {
-        const month = rangeVal.replace('M:', '');
-        filtered = rawTransactions.filter(t => {
-          const d = new Date(t.created_at);
-          const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          return mStr === month;
-        });
+      if (asset) {
+        document.getElementById('asset-modal-title').innerText = '✏️ 編輯資產項目';
+        document.getElementById('edit-asset-id').value = asset.id;
+        document.getElementById('new-asset-type').value = asset.type;
+        document.getElementById('new-asset-symbol').value = asset.symbol || '';
+        document.getElementById('new-asset-name').value = asset.name;
+        document.getElementById('new-asset-account-select').value = asset.account_name || '預設帳戶';
+        document.getElementById('new-asset-qty').value = asset.qty;
+        document.getElementById('new-asset-price').value = asset.price;
+        document.getElementById('new-asset-currency').value = asset.currency;
+      } else {
+        document.getElementById('asset-modal-title').innerText = '➕ 新增 / 併入資產項目';
+        document.getElementById('edit-asset-id').value = '';
+        document.getElementById('new-asset-type').value = 'stock';
+        document.getElementById('new-asset-symbol').value = '';
+        document.getElementById('new-asset-name').value = '';
+        document.getElementById('new-asset-qty').value = '';
+        document.getElementById('new-asset-price').value = '1';
+        document.getElementById('new-asset-currency').value = 'TWD';
       }
-
-      if (filtered.length === 0) return alert('選取範圍內無收支紀錄');
-
-      const typeNameMap = { 'income': '收入', 'expense': '支出', 'realize': '資產變現' };
-      let csv = "日期,類型,說明/分類,金額(TWD)\n";
-      filtered.forEach(t => {
-        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
-        csv += `"${dateStr}","${typeNameMap[t.type] || t.type}","${t.category}",${t.amount}\n`;
-      });
-
-      downloadCSV(csv, `收支紀錄_${rangeVal.replace(':', '_')}.csv`);
+      toggleSymbolInput(document.getElementById('new-asset-type').value);
     }
 
     function toggleAssetModal(show) {
       document.getElementById('asset-modal').classList.toggle('hidden', !show);
-      if (show) {
-        populateAccountOptions();
-        toggleSymbolInput(document.getElementById('new-asset-type').value);
+    }
+
+    function toggleSymbolInput(type) {
+      const symContainer = document.getElementById('symbol-container');
+      const priceContainer = document.getElementById('price-container');
+      if (type === 'stock') {
+        symContainer.classList.remove('hidden');
+        priceContainer.classList.remove('hidden');
+      } else {
+        symContainer.classList.add('hidden');
+        if (type === 'cash') priceContainer.classList.add('hidden');
+        else priceContainer.classList.remove('hidden');
       }
+    }
+
+    async function handleAddOrUpdateAsset(e) {
+      e.preventDefault();
+      const id = document.getElementById('edit-asset-id').value;
+      const type = document.getElementById('new-asset-type').value;
+      const symbol = document.getElementById('new-asset-symbol').value.trim().toUpperCase();
+      let name = document.getElementById('new-asset-name').value.trim();
+      let accountSelect = document.getElementById('new-asset-account-select').value;
+      
+      if (accountSelect === '__CUSTOM__') {
+        accountSelect = document.getElementById('new-asset-account-custom').value.trim();
+        if (accountSelect && !userAccountsList.includes(accountSelect)) {
+          userAccountsList.push(accountSelect);
+          if (hasAccountsTable) {
+            await supabaseClient.from('accounts').insert([{ user_id: currentUser.id, name: accountSelect }]);
+          }
+        }
+      }
+
+      const qty = parseFloat(document.getElementById('new-asset-qty').value);
+      const price = parseFloat(document.getElementById('new-asset-price').value) || 1;
+      const currency = document.getElementById('new-asset-currency').value;
+
+      if (!name) name = symbol || '未命名資產';
+
+      // 檢查是否同帳戶、同幣別、同名稱資產可併入
+      const existing = loadedAssets.find(a => 
+        !id && a.account_name === accountSelect && a.currency === currency && 
+        ((symbol && a.symbol === symbol) || (!symbol && a.name === name))
+      );
+
+      if (existing) {
+        const newQty = existing.qty + qty;
+        await supabaseClient.from('assets').update({ qty: newQty, price }).eq('id', existing.id);
+      } else if (id) {
+        await supabaseClient.from('assets').update({
+          type, symbol, name, account_name: accountSelect, qty, price, currency
+        }).eq('id', id);
+      } else {
+        await supabaseClient.from('assets').insert([{
+          user_id: currentUser.id,
+          type, symbol, name, account_name: accountSelect, qty, price, currency
+        }]);
+      }
+
+      toggleAssetModal(false);
+      await loadAssets();
+    }
+
+    async function deleteAsset(id) {
+      if (!confirm('確定要刪除此資產嗎？')) return;
+      await supabaseClient.from('assets').delete().eq('id', id);
+      await loadAssets();
+    }
+
+    // 資產微調彈窗
+    function openAdjustModal(id, name) {
+      document.getElementById('adjust-asset-id').value = id;
+      document.getElementById('adjust-title').innerText = '⚙️ 調整：' + name;
+      document.getElementById('adjust-amount').value = '';
+      document.getElementById('adjust-modal').classList.remove('hidden');
     }
 
     function toggleAdjustModal(show) {
       document.getElementById('adjust-modal').classList.toggle('hidden', !show);
     }
 
-    function toggleAccountModal(show) {
-      document.getElementById('account-modal').classList.toggle('hidden', !show);
+    async function handleAdjustSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('adjust-asset-id').value;
+      const mode = document.getElementById('adjust-mode').value;
+      const amount = parseFloat(document.getElementById('adjust-amount').value);
+
+      const target = loadedAssets.find(a => a.id === id);
+      if (!target) return;
+
+      let newQty = target.qty;
+      if (mode === 'add') newQty += amount;
+      else if (mode === 'sub') newQty = Math.max(0, newQty - amount);
+      else if (mode === 'set') newQty = amount;
+
+      await supabaseClient.from('assets').update({ qty: newQty }).eq('id', id);
+      toggleAdjustModal(false);
+      await loadAssets();
     }
 
+    // 收支紀錄功能
+    async function loadTransactions() {
+      if (!currentUser) return;
+      const { data, error } = await supabaseClient
+        .from('transactions')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('date', { ascending: false });
+
+      rawTransactions = data || [];
+      populateTxMonthFilter();
+      renderTransactions();
+    }
+
+    function populateTxMonthFilter() {
+      const select = document.getElementById('tx-month-filter');
+      const exportSelect = document.getElementById('export-tx-range');
+      const months = [...new Set(rawTransactions.map(t => t.date.substring(0, 7)))];
+
+      const options = '<option value="all">全部紀錄</option>' + 
+        months.map(m => `<option value="${m}">${m}</option>`).join('');
+
+      select.innerHTML = options;
+      if (exportSelect) exportSelect.innerHTML = options;
+    }
+
+    function populateTxTargetAssets() {
+      const select = document.getElementById('tx-target-asset-id');
+      if (!select) return;
+
+      const cashAssets = loadedAssets.filter(a => a.type === 'cash');
+      select.innerHTML = '<option value="">-- 不連動變更帳戶 (僅純紀錄收支) --</option>' +
+        cashAssets.map(a => `<option value="${a.id}">[${a.account_name}] ${a.name} (庫存: ${a.qty} ${a.currency})</option>`).join('');
+    }
+
+    function updateTxLinkHint(type) {
+      const hint = document.getElementById('tx-asset-link-hint');
+      if (type === 'income') hint.innerText = '選擇銀行帳戶後，此筆收入將會自動加總至該帳戶存款中。';
+      else if (type === 'expense') hint.innerText = '選擇銀行帳戶後，此筆支出將會自動扣除該帳戶存款。';
+      else if (type === 'realize') hint.innerText = '變現賣出資產後，資金將會加算至所選之現金帳戶。';
+    }
+
+    async function handleTransaction(e) {
+      e.preventDefault();
+      const type = document.getElementById('tx-type').value;
+      const targetAssetId = document.getElementById('tx-target-asset-id').value;
+      const category = document.getElementById('tx-category').value.trim();
+      const amount = parseFloat(document.getElementById('tx-amount').value);
+      const date = document.getElementById('tx-date').value;
+
+      // 寫入交易明細
+      await supabaseClient.from('transactions').insert([{
+        user_id: currentUser.id, type, category, amount, date
+      }]);
+
+      // 若有選連動帳戶，自動更新現金資產
+      if (targetAssetId) {
+        const asset = loadedAssets.find(a => a.id === targetAssetId);
+        if (asset) {
+          let newQty = asset.qty;
+          if (type === 'income' || type === 'realize') newQty += amount;
+          else if (type === 'expense') newQty = Math.max(0, newQty - amount);
+
+          await supabaseClient.from('assets').update({ qty: newQty }).eq('id', targetAssetId);
+          await loadAssets();
+        }
+      }
+
+      document.getElementById('tx-form').reset();
+      document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+      await loadTransactions();
+    }
+
+    function renderTransactions() {
+      const month = document.getElementById('tx-month-filter').value;
+      const listEl = document.getElementById('tx-list');
+
+      let filtered = rawTransactions;
+      if (month !== 'all') {
+        filtered = filtered.filter(t => t.date.startsWith(month));
+      }
+
+      let inc = 0, exp = 0;
+      filtered.forEach(t => {
+        if (t.type === 'income' || t.type === 'realize') inc += t.amount;
+        else if (t.type === 'expense') exp += t.amount;
+      });
+
+      document.getElementById('sum-income').innerText = 'NT$ ' + Math.round(inc).toLocaleString();
+      document.getElementById('sum-expense').innerText = 'NT$ ' + Math.round(exp).toLocaleString();
+      document.getElementById('sum-net').innerText = 'NT$ ' + Math.round(inc - exp).toLocaleString();
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="text-center p-4 text-slate-500 text-xs">尚無任何收支紀錄。</div>';
+        return;
+      }
+
+      listEl.innerHTML = filtered.map(t => `
+        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex justify-between items-center text-xs">
+          <div>
+            <div class="font-bold text-slate-200">${t.category}</div>
+            <div class="text-[10px] text-slate-400">${t.date}</div>
+          </div>
+          <div class="font-mono font-bold ${t.type === 'expense' ? 'text-rose-400' : 'text-emerald-400'}">
+            ${t.type === 'expense' ? '-' : '+'} ${t.amount.toLocaleString()}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // CSV 匯出功能
     function toggleExportModal(show) {
       document.getElementById('export-modal').classList.toggle('hidden', !show);
+    }
+
+    function downloadCSV(filename, csvContent) {
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function exportAssetsCSV() {
+      let csv = "資產名稱,代碼,類別,存放帳戶,數量,最新單價,幣別,折算台幣估值\n";
+      loadedAssets.forEach(a => {
+        let rate = 1;
+        if (a.currency === 'USD') rate = currentUsdRate;
+        else if (a.currency === 'JPY') rate = currentJpyRate;
+        const twd = Math.round(a.qty * a.price * rate);
+        csv += `"${a.name}","${a.symbol || ''}","${typeMap[a.type] || a.type}","${a.account_name || ''}",${a.qty},${a.price},"${a.currency}",${twd}\n`;
+      });
+      downloadCSV(`個人資產清單_${new Date().toISOString().split('T')[0]}.csv`, csv);
+    }
+
+    function exportTransactionsCSV() {
+      const range = document.getElementById('export-tx-range').value;
+      let list = rawTransactions;
+      if (range !== 'all') list = list.filter(t => t.date.startsWith(range));
+
+      let csv = "日期,類型,說明分類,金額\n";
+      list.forEach(t => {
+        csv += `"${t.date}","${t.type}","${t.category}",${t.amount}\n`;
+      });
+      downloadCSV(`收支紀錄_${range}_${new Date().toISOString().split('T')[0]}.csv`, csv);
     }
 
     window.onload = init;
