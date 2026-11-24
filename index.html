@@ -29,17 +29,33 @@
   <main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
     <!-- Auth -->
-    <section id="auth-section" class="max-w-md mx-auto bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4">
-      <h2 class="text-lg font-semibold text-center text-emerald-400">登入 / 註冊</h2>
-      <input id="email" type="email" placeholder="Email" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm" />
-      <input id="password" type="password" placeholder="密碼" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm" />
-      <div class="flex gap-3">
-        <button onclick="doLogin()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 rounded-xl py-2.5 text-sm font-medium">登入</button>
-        <button onclick="doSignup()" class="flex-1 bg-slate-700 hover:bg-slate-600 rounded-xl py-2.5 text-sm">註冊</button>
-      </div>
-      <button onclick="doReset()" class="w-full text-xs text-slate-500 hover:text-emerald-400">忘記密碼</button>
-      <p id="auth-msg" class="text-xs text-center text-rose-400 hidden"></p>
-    </section>
+  async function doSignup() {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  
+  if (!email || !password) {
+    alert('請輸入 Email 和密碼');
+    return;
+  }
+  if (password.length < 6) {
+    alert('密碼至少需要 6 個字元');
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      alert('註冊失敗：' + error.message);
+      console.error(error);
+    } else {
+      alert('註冊成功！請直接嘗試登入（如果有開 Email 驗證，請先去信箱點連結）');
+      console.log(data);
+    }
+  } catch (err) {
+    alert('發生錯誤，請打開 F12 查看 Console');
+    console.error(err);
+  }
+}
 
     <!-- App -->
     <div id="app" class="hidden space-y-6">
