@@ -20,17 +20,17 @@
     <h2 style="text-align:center; color:#34d399;">Auth 測試</h2>
     <input id="email" type="email" placeholder="Email" />
     <input id="password" type="password" placeholder="密碼（至少6碼）" />
-    <button class="login" onclick="login()">登入</button>
-    <button class="signup" onclick="signup()">註冊</button>
+    <button class="login" onclick="doLogin()">登入</button>
+    <button class="signup" onclick="doSignup()">註冊</button>
     <div id="msg"></div>
   </div>
 
   <script>
-    // 請確認這兩行是正確的
     const SUPABASE_URL = 'https://zsrnxfluhqjseltmgimm.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_ix_4ZSypiUVpMxdDzE8Frg___QsGMfO';
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // 這裡改成 sb，避免跟函式庫的 supabase 衝突
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     function show(msg, isError = false) {
       const el = document.getElementById('msg');
@@ -38,11 +38,11 @@
       el.textContent = msg;
     }
 
-    async function login() {
+    async function doLogin() {
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       show('登入中...');
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) {
         show('登入失敗：' + error.message, true);
         console.error(error);
@@ -51,10 +51,10 @@
       }
     }
 
-    async function signup() {
+    async function doSignup() {
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
-      
+
       if (!email || !password) {
         show('請輸入 Email 和密碼', true);
         return;
@@ -66,7 +66,7 @@
 
       show('註冊中...');
       try {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await sb.auth.signUp({ email, password });
         if (error) {
           show('註冊失敗：' + error.message, true);
           console.error(error);
@@ -80,8 +80,7 @@
       }
     }
 
-    // 頁面載入時先檢查 supabase 有沒有成功建立
-    console.log('Supabase client:', supabase);
+    console.log('Supabase client 已建立', sb);
   </script>
 </body>
 </html>
